@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/julienschmidt/httprouter"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -16,31 +17,29 @@ import (
 	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
-	//	"entry_task/model"
-	//"entry_task/config"
-
 	"log"
 )
 
 // masuk ke model
 
 func DBConn() (db *sql.DB, err error) {
-	dbDriver := "mysql"
-	dbUser := "root"
-	//dbPass := ""
-	dbName := "entry_task"
+	//dbDriver := "mysql"
+	//dbUser := "devel"
+	////dbPass := ""
+	//dbName := "entry_task"
 
 	//	db, err = sql.Open(dbDriver, dbUser+":"+dbPass+"@/"+dbName)
-	db, err = sql.Open(dbDriver, dbUser+"@/"+dbName)
+	//db, err = sql.Open(dbDriver, dbUser+"@/"+dbName)
+	db, err = sql.Open("mysql", "devel:devel@tcp(127.0.0.1:3306)/entry_task")
 
 	return
 }
 
 type User struct {
-	Id       int    `json:"Id"`
-	UserName string `json:"UserName"`
-	NickName string `json:"NickName"`
-	Picture  string `json:"Picture"`
+	Id       int    `json:"id"`
+	UserName string `json:"userName"`
+	NickName string `json:"name"`
+	Picture  string `json:"picture"`
 }
 
 // mengembalikan pesan kesalahan/sukses seperti insert/delete dll ke clien
@@ -54,17 +53,25 @@ type Gambar struct {
 }
 
 func main() {
-	http.HandleFunc("/registeruser", RegisterUserFunc)
-	http.HandleFunc("/login", LoginFunc)
-	http.HandleFunc("/edituser", EditUserFunc)
-	http.HandleFunc("/getprofile", GetProfileFunc)
-	http.HandleFunc("/uploadprofilepict", UploadProfilePictFunc)
-	http.HandleFunc("/getprofilepict", GetProfilePictFunc)
+	fmt.Println("before router")
+	router := httprouter.New()
+
+	// GET
+	router.GET("/getprofile", GetProfileFunc)
+	router.GET("/getprofilepict", GetProfilePictFunc)
+
+	//POST
+	router.POST("/registeruser", RegisterUserFunc)
+	router.GET("/login", LoginFunc)
+	router.POST("/edituser", EditUserFunc)
+
+	//PUT
+	router.PUT("/uploadprofilepict", UploadProfilePictFunc)
 
 	//	base64toJpg(getJPEGbase64("flower.jpg"))
 	//base64toJpg(getJPEGbase64("a.png"))
 
-	http.ListenAndServe(":8080", nil)
+	http.ListenAndServe(":8080", router)
 }
 
 func base64toPng(fUser string, fPicture string) {
@@ -222,7 +229,7 @@ func fgetbase64(fileName string) string {
 // end point http://localhost:8080/registeruser?username=xxxx&nickname=yyyyyy
 // username (uniq key)
 // ------------------------------------------------------------------------------
-func RegisterUserFunc(w http.ResponseWriter, r *http.Request) {
+func RegisterUserFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	if r.Method == "POST" {
 		db, err := DBConn()
 		if err != nil {
@@ -244,7 +251,7 @@ func RegisterUserFunc(w http.ResponseWriter, r *http.Request) {
 		*/
 
 		// insert ke database (username uniq key, id sequance )
-		_, err = db.Exec("insert into tbluser(username,nickname)  values (?, ?) ", newUser.UserName, newUser.NickName)
+		_, err = db.Exec("insert into user(username,nickname)  values (?, ?) ", newUser.UserName, newUser.NickName)
 		if err != nil {
 			pesan := Pesan{"Gagal insert ", 0}
 			jsonData, err := json.Marshal(pesan)
@@ -276,66 +283,63 @@ func RegisterUserFunc(w http.ResponseWriter, r *http.Request) {
 // end point http://localhost:8080/login?username=xxxx
 // jika user ada, return json (id,namauser dan nickname) sebaliknya null
 // -----------------------------------------------------------------------------------------------
-func LoginFunc(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+func LoginFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 
-	if r.Method == "GET" {
-
-		db, err := DBConn()
-		if err != nil {
-			panic(err.Error())
-		}
-		defer db.Close()
-
-		var newUser User
-		var result []User
-
-		//		newUser.UserName = r.FormValue("username")
-		newUser.UserName = r.URL.Query().Get("username")
-
-		rows, err := db.Query("SELECT id,username,nickname  FROM tbluser WHERE  username=? LIMIT 1", newUser.UserName)
-		if err != nil {
-			panic(err.Error())
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var each = User{}
-
-			var err = rows.Scan(&each.Id, &each.UserName, &each.NickName)
-			if err != nil {
-				panic(err.Error())
-				// fmt.Println(err.Error())
-				// return
-			}
-
-			result = append(result, each)
-
-		}
-		// for _, each := range result {
-		// 	fmt.Println(each.NickName)
-		// }
-
-		// jika data ditemukan, return data user, else  null
-		// atau mau...	http.Error(w, "User not found", http.StatusNotFound) ??????
-
-		var jsonData, errj = json.Marshal(result)
-		if errj != nil {
-			panic(err.Error())
-			//http.Error(w, err.Error(), http.StatusInternalServerError)
-			//return
-		}
-
-		w.Write(jsonData)
-		return
+	db, err := DBConn()
+	if err != nil {
+		panic(err.Error())
 	}
+	defer db.Close()
+
+	var newUser User
+	var result []User
+
+	//		newUser.UserName = r.FormValue("username")
+	newUser.UserName = r.URL.Query().Get("username")
+
+	rows, err := db.Query("SELECT id,username,name  FROM user WHERE  username=? LIMIT 1", newUser.UserName)
+	if err != nil {
+		panic(err.Error())
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var each = User{}
+
+		var err = rows.Scan(&each.Id, &each.UserName, &each.NickName)
+		if err != nil {
+			panic(err.Error())
+			// fmt.Println(err.Error())
+			// return
+		}
+
+		result = append(result, each)
+
+	}
+	// for _, each := range result {
+	// 	fmt.Println(each.NickName)
+	// }
+
+	// jika data ditemukan, return data user, else  null
+	// atau mau...	http.Error(w, "User not found", http.StatusNotFound) ??????
+
+	var jsonData, errj = json.Marshal(result)
+	if errj != nil {
+		panic(err.Error())
+		//http.Error(w, err.Error(), http.StatusInternalServerError)
+		//return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonData)
+	return
 }
 
 // -------------------------------------------------------------------------------------------------
 // --Edit/update  nick name
 // end point http://localhost:8080/edituser?username=xxxx&nicname=yyyyyy
 // -------------------------------------------------------------------------------------------------
-func EditUserFunc(w http.ResponseWriter, r *http.Request) {
+func EditUserFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	w.Header().Set("Content-Type", "application/json")
 
 	//if r.Method == "POST" {
@@ -356,7 +360,7 @@ func EditUserFunc(w http.ResponseWriter, r *http.Request) {
 	//	newUser.NickName = r.PostFormValue("nickname")
 	// r.ParseForm   r.Formu sername]
 
-	_, err = db.Exec("UPDATE tbluser SET  nickname=? WHERE  username=?", newUser.NickName, newUser.UserName)
+	_, err = db.Exec("UPDATE user SET  nickname=? WHERE  username=?", newUser.NickName, newUser.UserName)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -379,7 +383,7 @@ func EditUserFunc(w http.ResponseWriter, r *http.Request) {
 // end point http://localhost:8080/userprofile?username=xxxx
 // jika username tdk ditemukan, return null
 // -----------------------------------------------------------------------------------------------
-func GetProfileFunc(w http.ResponseWriter, r *http.Request) {
+func GetProfileFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if r.Method == "GET" {
@@ -399,7 +403,7 @@ func GetProfileFunc(w http.ResponseWriter, r *http.Request) {
 		newUser.UserName = r.URL.Query().Get("username")
 
 		//????		rows, err := db.Query("SELECT * FROM Employee WHERE id=? LIMIT 1", "a")
-		rows, err := db.Query("SELECT id,username,nickname  FROM tbluser WHERE  username=? LIMIT 1", newUser.UserName)
+		rows, err := db.Query("SELECT id,username,nickname  FROM user WHERE  username=? LIMIT 1", newUser.UserName)
 		if err != nil {
 			panic(err.Error())
 		}
@@ -436,29 +440,26 @@ func GetProfileFunc(w http.ResponseWriter, r *http.Request) {
 // file di simpan di server dgn nama file sesuai nama user
 // Converts  base64 data to   png
 // -----------------------------------------------------------------------------------------------
-func UploadProfilePictFunc(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "POST" {
-		/*
-			db, err := DBConn()
+func UploadProfilePictFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	/*
+		db, err := DBConn()
 
-			if err != nil {
-				fmt.Println(err.Error())
-				return
-			}
-			defer db.Close()
-		*/
-		var newUser User
+		if err != nil {
+			fmt.Println(err.Error())
+			return
+		}
+		defer db.Close()
+	*/
+	var newUser User
 
-		newUser.UserName = r.FormValue("username")
-		newUser.Picture = r.FormValue("picture")
+	newUser.UserName = r.FormValue("username")
+	newUser.Picture = r.FormValue("picture")
 
-		//sementara tdk perlu cek ke database apakah username tsb ada atau tidak
+	//sementara tdk perlu cek ke database apakah username tsb ada atau tidak
 
-		base64toPng(newUser.UserName, newUser.Picture)
+	base64toPng(newUser.UserName, newUser.Picture)
 
-		return
-
-	}
+	return
 
 	http.Error(w, "Harus Post", http.StatusBadRequest)
 }
@@ -467,7 +468,7 @@ func UploadProfilePictFunc(w http.ResponseWriter, r *http.Request) {
 // GetProfilePictFunc, pict stlh di decode di write/dikirim ke user dgn json
 //
 // -----------------------------------------------------------------------------------------------
-func GetProfilePictFunc(w http.ResponseWriter, r *http.Request) {
+func GetProfilePictFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if r.Method == "GET" {

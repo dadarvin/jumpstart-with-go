@@ -6,22 +6,23 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/julienschmidt/httprouter"
+	"github.com/golang/gddo/httputil/header"
+	"golang.org/x/crypto/bcrypt"
 	"image"
 	"image/jpeg"
 	"image/png"
-	"regexp"
-
+	"io"
+	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
-	"log"
+	"github.com/julienschmidt/httprouter"
 )
 
-// masuk ke model
-
+// DBConn make connection to database
 func DBConn() (db *sql.DB, err error) {
 	//dbDriver := "mysql"
 	//dbUser := "devel"
@@ -36,16 +37,30 @@ func DBConn() (db *sql.DB, err error) {
 }
 
 type User struct {
-	Id       int    `json:"id"`
-	UserName string `json:"userName"`
-	NickName string `json:"name"`
-	Picture  string `json:"picture"`
+	Id             int    `json:"id" form:"id"`
+	UserName       string `json:"username" form:"username"`
+	NickName       string `json:"nickname" form:"nickname"`
+	Password       string `json:"password" form:"password"`
+	ProfilePicture string `json:"profile_picture" form:"profile_picture"`
 }
 
-// mengembalikan pesan kesalahan/sukses seperti insert/delete dll ke clien
-type Pesan struct {
-	NamaPesan string
-	KodePesan int
+// Pesan mengembalikan pesan kesalahan/sukses seperti insert/delete dll ke clien
+//type Pesan struct {
+//	NamaPesan string
+//	KodePesan int
+//}
+
+type JsonResponse struct {
+	Data interface{} `json:"data"`
+}
+
+type JsonErrorResponse struct {
+	Error *ApiResponse `json:"error"`
+}
+
+type ApiResponse struct {
+	Status  int    `json:"status"`
+	Message string `json:"message"`
 }
 
 type Gambar struct {
@@ -53,25 +68,322 @@ type Gambar struct {
 }
 
 func main() {
-	fmt.Println("before router")
 	router := httprouter.New()
 
 	// GET
-	router.GET("/getprofile", GetProfileFunc)
-	router.GET("/getprofilepict", GetProfilePictFunc)
+	router.GET("/get-profile/:id", GetProfileFunc)
+	router.GET("/get-profile-pict/:id", GetProfilePictFunc)
 
 	//POST
-	router.POST("/registeruser", RegisterUserFunc)
-	router.GET("/login", LoginFunc)
-	router.POST("/edituser", EditUserFunc)
+	router.POST("/register", RegisterUserFunc)
+	router.POST("/login", LoginFunc)
 
 	//PUT
 	router.PUT("/uploadprofilepict", UploadProfilePictFunc)
+	router.PUT("/change-nickname", EditUserFunc)
 
-	//	base64toJpg(getJPEGbase64("flower.jpg"))
-	//base64toJpg(getJPEGbase64("a.png"))
+	fmt.Println("Running Server in :8080......")
+	log.Fatal(http.ListenAndServe(":8080", router))
+}
 
-	http.ListenAndServe(":8080", router)
+func HashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	return string(bytes), err
+}
+
+func CheckPasswordHash(password, hash string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	return err == nil
+}
+
+func checkPostHeader(r *http.Request) string {
+	msg := ""
+	if r.Header.Get("Content-Type") != "" {
+		value, _ := header.ParseValueAndParams(r.Header, "Content-Type")
+		if value != "application/json" {
+			msg = "Content-Type header is not application/json"
+			return msg
+		}
+	}
+	return msg
+}
+
+func httpResponse(w http.ResponseWriter, m interface{}) {
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(&JsonResponse{Data: m}); err != nil {
+		errorResponse(w, http.StatusInternalServerError, "Internal Server Error")
+	}
+}
+
+func errorResponse(w http.ResponseWriter, errorCode int, errorMsg string) {
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.WriteHeader(errorCode)
+	json.NewEncoder(w).Encode(&JsonErrorResponse{Error: &ApiResponse{Status: errorCode, Message: errorMsg}})
+}
+
+// RegisterUserFunc register new user
+// @Router /register [POST]
+// @Param username body string
+// @Param nickname body string
+func RegisterUserFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	var newUser User
+
+	checkPost := checkPostHeader(r)
+	if checkPost != "" {
+		http.Error(w, checkPost, http.StatusUnsupportedMediaType)
+	}
+
+	bodyVal, err := io.ReadAll(r.Body)
+	if err != nil {
+		fmt.Println("error", err)
+	}
+
+	err = json.Unmarshal(bodyVal, &newUser)
+	if err != nil {
+		fmt.Println("error unmarshaling")
+	}
+
+	// hash password with bcrypt
+	hashedPass, err := HashPassword(newUser.Password)
+
+	// connecting to database
+	db, err := DBConn()
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+	defer db.Close()
+
+	// insert ke database (username uniq key, id sequance )
+	_, err = db.Exec("insert into user(username, nickname, password)  values (?, ?, ?) ", newUser.UserName, newUser.NickName, hashedPass)
+	if err != nil {
+		fmt.Println(err)
+		http.Error(w, "failed inserting data", http.StatusInternalServerError) // return
+		return
+	}
+
+	httpResponse(w, newUser)
+}
+
+// LoginFunc endpoint for user login
+// @Routes /login
+// @Param id body int
+// @Param password body string
+// jika user ada, return json (id,namauser dan nickname) sebaliknya null
+func LoginFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+
+	db, err := DBConn()
+	if err != nil {
+		panic(err.Error())
+	}
+	defer db.Close()
+
+	var newUser User
+	var result []User
+
+	//		newUser.UserName = r.FormValue("username")
+	newUser.UserName = r.URL.Query().Get("username")
+
+	rows, err := db.Query("SELECT id,username,name  FROM user WHERE  username=? LIMIT 1", newUser.UserName)
+	if err != nil {
+		panic(err.Error())
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var each = User{}
+
+		var err = rows.Scan(&each.Id, &each.UserName, &each.NickName)
+		if err != nil {
+			panic(err.Error())
+			// fmt.Println(err.Error())
+			// return
+		}
+
+		result = append(result, each)
+
+	}
+	// for _, each := range result {
+	// 	fmt.Println(each.NickName)
+	// }
+
+	// jika data ditemukan, return data user, else  null
+	// atau mau...	http.Error(w, "User not found", http.StatusNotFound) ??????
+
+	var jsonData, errj = json.Marshal(result)
+	if errj != nil {
+		panic(err.Error())
+		//http.Error(w, err.Error(), http.StatusInternalServerError)
+		//return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonData)
+	return
+}
+
+// EditUserFunc Edit user nickname
+// @Router /edit-user
+// -------------------------------------------------------------------------------------------------
+func EditUserFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	w.Header().Set("Content-Type", "application/json")
+
+	//if r.Method == "POST" {
+	db, err := DBConn()
+
+	if err != nil {
+		panic(err.Error())
+	}
+	defer db.Close()
+
+	var newUser User
+
+	//newUser.UserName = r.URL.Query().Get("username")
+	newUser.UserName = r.FormValue("username")
+	newUser.NickName = r.FormValue("nickname")
+
+	//	newUser.UserName = r.PostFormValue("username")
+	//	newUser.NickName = r.PostFormValue("nickname")
+	// r.ParseForm   r.Formu sername]
+
+	//_, err = db.Exec("UPDATE user SET  nickname=? WHERE  username=?", newUser.NickName, newUser.UserName)
+	//if err != nil {
+	//	panic(err.Error())
+	//}
+	//
+	//pesan := Pesan{"Sukses Update", 200}
+	//jsonData, err := json.Marshal(pesan)
+	//if err != nil {
+	//	panic(err.Error())
+	//}
+	//w.Write(jsonData)
+	//return
+
+	//}
+	//	http.Error(w, "harus menggunakan POST...........", http.StatusBadRequest)
+
+}
+
+// GetProfileFunc Get Profile info
+// @Routes /user-profile/:id
+// @Params id queryParam int
+// jika username tdk ditemukan, return null
+// -----------------------------------------------------------------------------------------------
+func GetProfileFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	w.Header().Set("Content-Type", "application/json")
+
+	db, err := DBConn()
+
+	if err != nil {
+		//fmt.Println(err.Error())
+		//return
+		panic(err.Error())
+	}
+	defer db.Close()
+
+	var newUser User
+
+	//		newUser.UserName = r.FormValue("username")
+	newUser.UserName = r.URL.Query().Get("username")
+
+	//????		rows, err := db.Query("SELECT * FROM Employee WHERE id=? LIMIT 1", "a")
+	rows, err := db.Query("SELECT id,username,nickname  FROM user WHERE  username=? LIMIT 1", newUser.UserName)
+	if err != nil {
+		panic(err.Error())
+	}
+	defer rows.Close()
+
+	var result []User
+
+	for rows.Next() {
+		var each = User{}
+
+		var err = rows.Scan(&each.Id, &each.UserName, &each.NickName)
+		if err != nil {
+			panic(err.Error())
+		}
+
+		result = append(result, each)
+	}
+	var jsonData, errj = json.Marshal(result)
+	if errj != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	w.Write(jsonData)
+	return
+
+	http.Error(w, "", http.StatusBadRequest)
+}
+
+// ----------------------------------
+// Picture Logic
+// ----------------------------------
+
+// UploadProfilePictFunc pict stlh di decode di write/dikirim ke user dgn json
+// file di simpan di server dgn nama file sesuai nama user
+// Converts  base64 data to   png
+func UploadProfilePictFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	/*
+		db, err := DBConn()
+
+		if err != nil {
+			fmt.Println(err.Error())
+			return
+		}
+		defer db.Close()
+	*/
+	var newUser User
+
+	newUser.UserName = r.FormValue("username")
+	newUser.ProfilePicture = r.FormValue("picture")
+
+	//sementara tdk perlu cek ke database apakah username tsb ada atau tidak
+
+	base64toPng(newUser.UserName, newUser.ProfilePicture)
+
+	return
+
+	http.Error(w, "Harus Post", http.StatusBadRequest)
+}
+
+// GetProfilePictFunc, pict stlh di decode di write/dikirim ke user dgn json
+func GetProfilePictFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method == "GET" {
+
+		db, err := DBConn()
+
+		if err != nil {
+			fmt.Println(err.Error())
+			return
+		}
+		defer db.Close()
+
+		var newUser User
+		var newGambar Gambar
+
+		newUser.UserName = r.FormValue("username")
+
+		newGambar.datagambar = fgetbase64(newUser.UserName)
+
+		var jsonData, errj = json.Marshal(newGambar.datagambar)
+		if errj != nil {
+			fmt.Println(err.Error())
+			return
+		}
+
+		w.Write(jsonData)
+
+		return
+
+	}
+
+	http.Error(w, "", http.StatusBadRequest)
 }
 
 func base64toPng(fUser string, fPicture string) {
@@ -193,8 +505,7 @@ func base64toJpg(data string) {
 
 }
 
-// Gets base64 string of an existing JPEG file
-// func getJPEGbase64(fileName string) string {
+// fgetbase64 Gets base64 string of an existing JPEG file
 func fgetbase64(fileName string) string {
 
 	var xx = fileName + ".png"
@@ -220,287 +531,6 @@ func fgetbase64(fileName string) string {
 	//fmt.Println("Base64 string is:", imgBase64Str)
 
 	return imgBase64Str
-}
-
-//???????????????????????????????????????????????????????????????????????????????????????????????????????????????????
-
-// ------------------------------------------------------------------------------
-// function to register user
-// end point http://localhost:8080/registeruser?username=xxxx&nickname=yyyyyy
-// username (uniq key)
-// ------------------------------------------------------------------------------
-func RegisterUserFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	if r.Method == "POST" {
-		db, err := DBConn()
-		if err != nil {
-			fmt.Println(err.Error())
-			return
-		}
-		defer db.Close()
-
-		var newUser User
-
-		newUser.UserName = r.FormValue("username")
-		newUser.NickName = r.FormValue("nickname")
-
-		/*
-			resBool, errStr := checkFormValue(w, r, xallStudents)
-			if resBool == false {
-				return false //???? perlu kode err/message ttg err , mis nama kosong dll???
-			}
-		*/
-
-		// insert ke database (username uniq key, id sequance )
-		_, err = db.Exec("insert into user(username,nickname)  values (?, ?) ", newUser.UserName, newUser.NickName)
-		if err != nil {
-			pesan := Pesan{"Gagal insert ", 0}
-			jsonData, err := json.Marshal(pesan)
-			if err != nil {
-				//fmt.Println(err) // return
-				//panic(err.Error())
-				//http.Error(w, err.Error(), http.StatusInternalServerError) // return
-				log.Fatal(err)
-			}
-			w.Write(jsonData)
-			return
-		}
-
-		pesan := Pesan{"Sukses", 200}
-		jsonData, err := json.Marshal(pesan)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Write(jsonData)
-		return
-	}
-
-	http.Error(w, "harus menggunakan POST...........", http.StatusBadRequest)
-}
-
-// --------------------------------------------------------------------------------------------
-// user login
-// end point http://localhost:8080/login?username=xxxx
-// jika user ada, return json (id,namauser dan nickname) sebaliknya null
-// -----------------------------------------------------------------------------------------------
-func LoginFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-
-	db, err := DBConn()
-	if err != nil {
-		panic(err.Error())
-	}
-	defer db.Close()
-
-	var newUser User
-	var result []User
-
-	//		newUser.UserName = r.FormValue("username")
-	newUser.UserName = r.URL.Query().Get("username")
-
-	rows, err := db.Query("SELECT id,username,name  FROM user WHERE  username=? LIMIT 1", newUser.UserName)
-	if err != nil {
-		panic(err.Error())
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var each = User{}
-
-		var err = rows.Scan(&each.Id, &each.UserName, &each.NickName)
-		if err != nil {
-			panic(err.Error())
-			// fmt.Println(err.Error())
-			// return
-		}
-
-		result = append(result, each)
-
-	}
-	// for _, each := range result {
-	// 	fmt.Println(each.NickName)
-	// }
-
-	// jika data ditemukan, return data user, else  null
-	// atau mau...	http.Error(w, "User not found", http.StatusNotFound) ??????
-
-	var jsonData, errj = json.Marshal(result)
-	if errj != nil {
-		panic(err.Error())
-		//http.Error(w, err.Error(), http.StatusInternalServerError)
-		//return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonData)
-	return
-}
-
-// -------------------------------------------------------------------------------------------------
-// --Edit/update  nick name
-// end point http://localhost:8080/edituser?username=xxxx&nicname=yyyyyy
-// -------------------------------------------------------------------------------------------------
-func EditUserFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	w.Header().Set("Content-Type", "application/json")
-
-	//if r.Method == "POST" {
-	db, err := DBConn()
-
-	if err != nil {
-		panic(err.Error())
-	}
-	defer db.Close()
-
-	var newUser User
-
-	//newUser.UserName = r.URL.Query().Get("username")
-	newUser.UserName = r.FormValue("username")
-	newUser.NickName = r.FormValue("nickname")
-
-	//	newUser.UserName = r.PostFormValue("username")
-	//	newUser.NickName = r.PostFormValue("nickname")
-	// r.ParseForm   r.Formu sername]
-
-	_, err = db.Exec("UPDATE user SET  nickname=? WHERE  username=?", newUser.NickName, newUser.UserName)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	pesan := Pesan{"Sukses Update", 200}
-	jsonData, err := json.Marshal(pesan)
-	if err != nil {
-		panic(err.Error())
-	}
-	w.Write(jsonData)
-	//return
-
-	//}
-	//	http.Error(w, "harus menggunakan POST...........", http.StatusBadRequest)
-
-}
-
-// --------------------------------------------------------------------------------------------
-// Get User Profile Func
-// end point http://localhost:8080/userprofile?username=xxxx
-// jika username tdk ditemukan, return null
-// -----------------------------------------------------------------------------------------------
-func GetProfileFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method == "GET" {
-
-		db, err := DBConn()
-
-		if err != nil {
-			//fmt.Println(err.Error())
-			//return
-			panic(err.Error())
-		}
-		defer db.Close()
-
-		var newUser User
-
-		//		newUser.UserName = r.FormValue("username")
-		newUser.UserName = r.URL.Query().Get("username")
-
-		//????		rows, err := db.Query("SELECT * FROM Employee WHERE id=? LIMIT 1", "a")
-		rows, err := db.Query("SELECT id,username,nickname  FROM user WHERE  username=? LIMIT 1", newUser.UserName)
-		if err != nil {
-			panic(err.Error())
-		}
-		defer rows.Close()
-
-		var result []User
-
-		for rows.Next() {
-			var each = User{}
-
-			var err = rows.Scan(&each.Id, &each.UserName, &each.NickName)
-			if err != nil {
-				panic(err.Error())
-			}
-
-			result = append(result, each)
-		}
-		var jsonData, errj = json.Marshal(result)
-		if errj != nil {
-			fmt.Println(err.Error())
-			return
-		}
-
-		w.Write(jsonData)
-		return
-
-	}
-
-	http.Error(w, "", http.StatusBadRequest)
-}
-
-// --------------------------------------------------------------------------------------------
-// UploadProfilePictFunc, pict stlh di decode di write/dikirim ke user dgn json
-// file di simpan di server dgn nama file sesuai nama user
-// Converts  base64 data to   png
-// -----------------------------------------------------------------------------------------------
-func UploadProfilePictFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	/*
-		db, err := DBConn()
-
-		if err != nil {
-			fmt.Println(err.Error())
-			return
-		}
-		defer db.Close()
-	*/
-	var newUser User
-
-	newUser.UserName = r.FormValue("username")
-	newUser.Picture = r.FormValue("picture")
-
-	//sementara tdk perlu cek ke database apakah username tsb ada atau tidak
-
-	base64toPng(newUser.UserName, newUser.Picture)
-
-	return
-
-	http.Error(w, "Harus Post", http.StatusBadRequest)
-}
-
-// --------------------------------------------------------------------------------------------
-// GetProfilePictFunc, pict stlh di decode di write/dikirim ke user dgn json
-//
-// -----------------------------------------------------------------------------------------------
-func GetProfilePictFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method == "GET" {
-
-		db, err := DBConn()
-
-		if err != nil {
-			fmt.Println(err.Error())
-			return
-		}
-		defer db.Close()
-
-		var newUser User
-		var newGambar Gambar
-
-		newUser.UserName = r.FormValue("username")
-
-		newGambar.datagambar = fgetbase64(newUser.UserName)
-
-		var jsonData, errj = json.Marshal(newGambar.datagambar)
-		if errj != nil {
-			fmt.Println(err.Error())
-			return
-		}
-
-		w.Write(jsonData)
-
-		return
-
-	}
-
-	http.Error(w, "", http.StatusBadRequest)
 }
 
 // ---------------------------------------------------------------------------------------------------------

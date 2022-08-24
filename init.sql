@@ -4,10 +4,9 @@ USE `entry_task`;
 
 -- Dumping structure for table entry_task.tbluser
 CREATE TABLE IF NOT EXISTS `user` (
-    `id` int(11) NOT NULL AUTO_INCREMENT,
+    `id` INT NOT NULL AUTO_INCREMENT,
     `username` varchar(50) UNIQUE NOT NULL,
-    `name` varchar(50) NOT NULL,
-    `password` varchar(255),
-    `is_admin` bool NOT NULL,
+    `nickname` varchar(50) NOT NULL,
+    `profile_picture` varchar(255),
     PRIMARY KEY (`id`)
-    ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4;
+    ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4;

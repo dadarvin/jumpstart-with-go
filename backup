@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/golang/gddo/httputil/header"
@@ -43,10 +42,11 @@ type User struct {
 
 // utk menampung basecode64 dari clien tuk dikonversi ke diskfile
 type User2 struct {
-	Id             int
 	UserName       string
 	ProfilePicture string
 }
+
+//??? pict biasa disimpan dlm file
 
 // Pesan mengembalikan pesan kesalahan/sukses seperti insert/delete dll ke clien
 //type Pesan struct {
@@ -55,8 +55,7 @@ type User2 struct {
 //}
 
 type JsonResponse struct {
-	Status int         `json:"status"`
-	Data   interface{} `json:"data"`
+	Data interface{} `json:"data"`
 }
 
 type JsonErrorResponse struct {
@@ -76,8 +75,10 @@ func main() {
 	router := httprouter.New()
 
 	// GET
-	router.GET("/get-profile/:id", GetProfileFunc)
-	router.GET("/get-profile-pict/:id", GetProfilePictFunc)
+	// router.GET("/get-profile/:id", GetProfileFunc)
+	// router.GET("/get-profile-pict/:id", GetProfilePictFunc)
+	router.GET("/get-profile", GetProfileFunc)
+	router.GET("/get-profile-pict", GetProfilePictFunc)
 
 	//POST
 	router.POST("/register", RegisterUserFunc)
@@ -117,7 +118,7 @@ func httpResponse(w http.ResponseWriter, m interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 
-	if err := json.NewEncoder(w).Encode(&JsonResponse{Status: http.StatusOK, Data: m}); err != nil {
+	if err := json.NewEncoder(w).Encode(&JsonResponse{Data: m}); err != nil {
 		errorResponse(w, http.StatusInternalServerError, "Internal Server Error")
 	}
 }
@@ -173,7 +174,7 @@ func RegisterUserFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Param
 	}
 
 	httpResponse(w, newUser)
-	//???   hrs respose, adlh  sukses register ..... ?????????????????????????????????????????????????????????????
+	//???   hrs respose sukses register ..... ?????????????????????????????????????????????????????????????
 }
 
 // LoginFunc endpoint for user login
@@ -293,7 +294,7 @@ func EditUserFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	//	newUser.NickName = r.PostFormValue("nickname")
 	// r.ParseForm   r.Formu sername]
 
-	_, err = db.Exec("UPDATE user SET  nickname=? WHERE  id=?", newUser.NickName, newUser.Id)
+	_, err = db.Exec("UPDATE user SET  nickname=? WHERE  username=?", newUser.NickName, newUser.UserName)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -314,11 +315,8 @@ func EditUserFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 // @Params id queryParam int
 // jika username tdk ditemukan, return null
 // -----------------------------------------------------------------------------------------------
-func GetProfileFunc(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
-	var (
-		newUser User
-		err     error
-	)
+func GetProfileFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	var newUser User
 	/*
 		checkPost := checkPostHeader(r)
 		if checkPost != "" {
@@ -337,12 +335,7 @@ func GetProfileFunc(w http.ResponseWriter, r *http.Request, param httprouter.Par
 	*/
 
 	//		newUser.UserName = r.FormValue("username")
-	// newUser.UserName = r.URL.Query().Get("id")
-	idString := param.ByName("id")
-	newUser.Id, err = strconv.Atoi(idString)
-	if err != nil {
-		fmt.Println("error converting string to int")
-	}
+	newUser.UserName = r.URL.Query().Get("username")
 
 	db, err := DBConn()
 	if err != nil {
@@ -353,7 +346,7 @@ func GetProfileFunc(w http.ResponseWriter, r *http.Request, param httprouter.Par
 	defer db.Close()
 
 	//????		rows, err := db.Query("SELECT * FROM Employee WHERE id=? LIMIT 1", "a")
-	rows, err := db.Query("SELECT id,username,nickname  FROM user WHERE  id=? LIMIT 1", newUser.Id)
+	rows, err := db.Query("SELECT id,username,nickname  FROM user WHERE  username=? LIMIT 1", newUser.UserName)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -402,10 +395,7 @@ func UploadProfilePictFunc(w http.ResponseWriter, r *http.Request, _ httprouter.
 		}
 		defer db.Close()
 	*/
-	var (
-		newUser User2
-		err     error
-	)
+	var newUser User2
 
 	checkPost := checkPostHeader(r)
 	if checkPost != "" {
@@ -425,39 +415,28 @@ func UploadProfilePictFunc(w http.ResponseWriter, r *http.Request, _ httprouter.
 	fmt.Println("test pict base 64 ............." + newUser.ProfilePicture)
 	//sementara tdk perlu cek ke database apakah username tsb ada atau tidak
 
-	//dikirim ke function base64Png untuk diconver kt file png dan disimpan di disk file dgn Id user sebagai filename.
-	base64toPng(strconv.Itoa(newUser.Id), newUser.ProfilePicture)
+	//dikirim ke function base64Png untuk diconver kt file png dan disimpan di disk file dgn nama user sebagai filename.
+	base64toPng(newUser.UserName, newUser.ProfilePicture)
 
 	//return
 
 }
 
 // GetProfilePictFunc, pict stlh di decode di write/dikirim ke user dgn json
-// @Routes /get-profile-pict/:id
-// @Params id parameter id user int
-// jika username tdk ditemukan, return null
-func GetProfilePictFunc(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
+func GetProfilePictFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 
-	var (
-		newUser User2
-		err     error
-	)
+	var newUser User2
 	// var newGambar [] Gambar
 	//	var newGambar []string
 
-	// newUser.UserName = r.URL.Query().Get("username")
-	idString := param.ByName("id")
-	newUser.Id, err = strconv.Atoi(idString)
-	if err != nil {
-		fmt.Println("error converting string to int")
-	}
+	newUser.UserName = r.URL.Query().Get("username")
 
 	//fgetbase64= fungsi utk menkonversi disk file ke basecode 64 dan dikirim ke clien
 	//		newGambar.datagambar = fgetbase64(newUser.UserName)
 	//	newGambar[0] = fgetbase64(newUser.UserName)
 	//newUser.ProfilePicture = fgetbase64(newUser.UserName)
 
-	httpResponse(w, fgetbase64(strconv.Itoa(newUser.Id)))
+	httpResponse(w, fgetbase64(newUser.UserName))
 	/*
 		w.Header().Set("Content-Type", "application/json")
 
@@ -475,7 +454,7 @@ func GetProfilePictFunc(w http.ResponseWriter, r *http.Request, param httprouter
 }
 
 // fungsi
-func base64toPng(fIdUser string, fPicture string) {
+func base64toPng(fUser string, fPicture string) {
 	const data = `
 /9j/4AAQSkZJRgABAQIAHAAcAAD/2wBDABALDA4MChAODQ4SERATGCgaGBYWGDEjJR0oOjM9PDkzODdA
 SFxOQERXRTc4UG1RV19iZ2hnPk1xeXBkeFxlZ2P/2wBDARESEhgVGC8aGi9jQjhCY2NjY2NjY2NjY2Nj
@@ -536,9 +515,9 @@ ubeK6t3gnXdG4wwziiii/UTKMOg6dbzJLFE4dSCP3rEdeOM8805tDsGMvySgSsS6rM6gk9eAcUUVftZt
 0HwyBXGeRjmrcUhMg2ghezd//rUUVcTKW5s2jZtY/QDaOKKKK8ip8bPRj8KP/9k=
 `
 
-	//	reader := base64.NewDecoder(base64.StdEncoding, strings.NewReader(data))
+	reader := base64.NewDecoder(base64.StdEncoding, strings.NewReader(data))
 	//fPicture adalah base64cie yg dikirim dari clien utk diubah jadi png
-	reader := base64.NewDecoder(base64.StdEncoding, strings.NewReader(fPicture))
+	//reader := base64.NewDecoder(base64.StdEncoding, strings.NewReader(fPicture))
 
 	m, formatString, err := image.Decode(reader)
 	if err != nil {
@@ -549,7 +528,7 @@ ubeK6t3gnXdG4wwziiii/UTKMOg6dbzJLFE4dSCP3rEdeOM8805tDsGMvySgSsS6rM6gk9eAcUUVftZt
 
 	//Encode from image format to writer
 	//fUser=nama user yg dijadinakan file name (nama user unique)
-	pngFilename := "Pict_" + fIdUser + ".png"
+	pngFilename := fUser + ".png"
 
 	f, err := os.OpenFile(pngFilename, os.O_WRONLY|os.O_CREATE, 0777)
 	if err != nil {
@@ -600,8 +579,8 @@ func base64toJpg(data string) {
 // fungsi utk mengamfile file berdasarkan nama user, utk diconversi kebase64cide dan dikirim ke clien
 func fgetbase64(fileName string) string {
 
-	var filename = "Pict_" + fileName + ".png"
-	imgFile, err := os.Open(filename)
+	var xx = fileName + ".png"
+	imgFile, err := os.Open(xx)
 
 	if err != nil {
 		fmt.Println(err)

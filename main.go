@@ -13,7 +13,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -32,44 +31,37 @@ func DBConn() (db *sql.DB, err error) {
 	return
 }
 
+// User struct for user data
 type User struct {
 	Id       int    `json:"id" form:"id"`
 	UserName string `json:"username" form:"username"`
 	NickName string `json:"nickname" form:"nickname"`
 	Password string `json:"password" form:"password"`
-	//	Is_admin       int    `json:"is_admin" form:"is_admin"`
-	//	ProfilePicture string `json:"profile_picture" form:"profile_picture"`
 }
 
-// utk menampung basecode64 dari clien tuk dikonversi ke diskfile
-type User2 struct {
-	Id             int
-	UserName       string
-	ProfilePicture string
+// UserPicture struct for containing basecode64 from client to convert into base64 format
+type UserPicture struct {
+	Id             int    `json:"id"`
+	UserName       string `json:"nickname"`
+	ProfilePicture string `json:"profilepicture"`
 }
 
-// Pesan mengembalikan pesan kesalahan/sukses seperti insert/delete dll ke clien
-//type Pesan struct {
-//	NamaPesan string
-//	KodePesan int
-//}
-
+// JsonResponse struct for JSON response
 type JsonResponse struct {
-	Status int         `json:"status"`
-	Data   interface{} `json:"data"`
+	Status  int         `json:"status"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data"`
 }
 
+// JSONErrorResponse struct for JSON error response
 type JsonErrorResponse struct {
 	Error *ApiResponse `json:"error"`
 }
 
+// ApiResponse response for Api request
 type ApiResponse struct {
 	Status  int    `json:"status"`
 	Message string `json:"message"`
-}
-
-type Gambar struct {
-	datagambar string `json:"dataGambar"`
 }
 
 func main() {
@@ -113,11 +105,11 @@ func checkPostHeader(r *http.Request) string {
 	return msg
 }
 
-func httpResponse(w http.ResponseWriter, responseCode int, m interface{}) {
+func httpResponse(w http.ResponseWriter, responseCode int, message string, m interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(responseCode)
 
-	if err := json.NewEncoder(w).Encode(&JsonResponse{Status: responseCode, Data: m}); err != nil {
+	if err := json.NewEncoder(w).Encode(&JsonResponse{Status: responseCode, Message: message, Data: m}); err != nil {
 		errorResponse(w, http.StatusInternalServerError, "Internal Server Error")
 	}
 }
@@ -137,29 +129,33 @@ func RegisterUserFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Param
 
 	checkPost := checkPostHeader(r)
 	if checkPost != "" {
-		http.Error(w, checkPost, http.StatusUnsupportedMediaType)
+		errorResponse(w, http.StatusUnsupportedMediaType, checkPost)
+		return
 	}
 
 	bodyVal, err := io.ReadAll(r.Body)
 	if err != nil {
-		fmt.Println("error", err)
+		errorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	err = json.Unmarshal(bodyVal, &newUser)
 	if err != nil {
-		fmt.Println("error unmarshaling")
+		errorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	// hash password with bcrypt
 	hashedPass, err := HashPassword(newUser.Password)
 	if err != nil {
-		fmt.Println("error hash password")
+		errorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	// connecting to database
 	db, err := DBConn()
 	if err != nil {
-		fmt.Println(err.Error())
+		errorResponse(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	defer db.Close()
@@ -167,14 +163,12 @@ func RegisterUserFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Param
 	// insert ke database (username uniq key, id sequance )
 	_, err = db.Exec("insert into user(username, nickname, password)  values (?, ?, ?) ", newUser.UserName, newUser.NickName, hashedPass)
 	if err != nil {
-		//	fmt.Println(err)
-		http.Error(w, "failed inserting data : "+err.Error(), http.StatusInternalServerError) // return
+		//http.Error(w, "failed inserting data : "+err.Error(), http.StatusInternalServerError)
+		errorResponse(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	var newUser_Response User
 
-	httpResponse(w, http.StatusOK, newUser_Response)
-	//???   hrs respose, adlh  sukses register ..... ?????????????????????????????????????????????????????????????
+	httpResponse(w, http.StatusOK, "Register Sukses", nil)
 }
 
 // LoginFunc endpoint for user login
@@ -187,64 +181,79 @@ func LoginFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 
 	checkPost := checkPostHeader(r)
 	if checkPost != "" {
-		http.Error(w, checkPost, http.StatusUnsupportedMediaType)
+		//		http.Error(w, checkPost, http.StatusUnsupportedMediaType)
+		errorResponse(w, http.StatusUnsupportedMediaType, " Harus menggunakan POST")
+		return
 	}
 
 	bodyVal, err := io.ReadAll(r.Body)
 	if err != nil {
-		fmt.Println("error", err)
+		errorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	err = json.Unmarshal(bodyVal, &newUser)
 	if err != nil {
-		fmt.Println("error unmarshaling")
+		errorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	// connect ke database
 	db, err := DBConn()
 	if err != nil {
-		panic(err.Error())
+		errorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	defer db.Close()
 
-	var result []User
+	// var result []User
 
-	//		newUser.UserName = r.FormValue("username")
-	//newUser.UserName = r.URL.Query().Get("username")
-
-	rows, err := db.Query("SELECT id,username,nickname,password  FROM user WHERE  username=? LIMIT 1", newUser.UserName)
+	rows, err := db.Query("SELECT id, username, nickname, password FROM user WHERE username=? LIMIT 1", newUser.UserName)
 	if err != nil {
-		panic(err.Error())
+		errorResponse(w, http.StatusBadRequest, err.Error())
+		return
+
 	}
 	defer rows.Close()
+	//	fmt.Println(rows)
 
+	//	var each = User{}
+	//	each := User{}
+	var each User
 	for rows.Next() {
-		var each = User{}
-		//    var pwHash = User{}
-		//var err = rows.Scan(&each.Id, &each.UserName, &each.Name, &each.Password,&is_admin)
 		var err = rows.Scan(&each.Id, &each.UserName, &each.NickName, &each.Password)
 		if err != nil {
-			panic(err.Error())
-			// fmt.Println(err.Error())
-			// return
+			errorResponse(w, http.StatusBadRequest, err.Error())
+			return
 		}
 
-		result = append(result, each)
-		//	pwHash = each.Password
+		// result = append(result, each)
 	}
 
-	//check password
-	//??? harusnya diluar for, namun utk dpt nial eaach.password?
-	for _, each2 := range result {
-		match := CheckPasswordHash(newUser.Password, each2.Password)
-
-		if !match {
-			result = []User{ // jika passwrod salah, maka return valuenya jadi null, sebaliknya return nama
-			}
-		}
+	if each.UserName == "" {
+		httpResponse(w, http.StatusOK, "Username tidak ditemukan", nil)
+		return
 	}
 
-	httpResponse(w, result)
+	match := CheckPasswordHash(newUser.Password, each.Password)
+	if !match {
+		httpResponse(w, http.StatusOK, "Password Salah", nil)
+		return
+	}
+
+	// UserData := UserData{
+	// 	Id: each.Id,
+	// 	UserName: each.UserName,
+	// 	NickName: each.NickName,
+	// }
+
+	// Return data user tanpa field password
+	userData := map[string]interface{}{
+		"id":       each.Id,
+		"username": each.UserName,
+		"nickname": each.NickName,
+	}
+	httpResponse(w, http.StatusOK, "Login Sukses", userData)
 	/*
 		// for _, each := range result {
 		// 	fmt.Println(each.NickName)
@@ -266,24 +275,22 @@ func LoginFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 func EditUserFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var newUser User
 
-	checkPost := checkPostHeader(r)
-	if checkPost != "" {
-		http.Error(w, checkPost, http.StatusUnsupportedMediaType)
-	}
-
 	bodyVal, err := io.ReadAll(r.Body)
 	if err != nil {
-		fmt.Println("error", err)
+		errorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	err = json.Unmarshal(bodyVal, &newUser)
 	if err != nil {
-		fmt.Println("error unmarshaling")
+		errorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	db, err := DBConn()
 	if err != nil {
-		panic(err.Error())
+		errorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	defer db.Close()
 
@@ -294,10 +301,13 @@ func EditUserFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	//	newUser.NickName = r.PostFormValue("nickname")
 	// r.ParseForm   r.Formu sername]
 
-	_, err = db.Exec("UPDATE user SET  nickname=? WHERE  id=?", newUser.NickName, newUser.Id)
+	_, err = db.Exec("UPDATE user SET nickname=? WHERE id=?", newUser.NickName, newUser.Id)
 	if err != nil {
-		panic(err.Error())
+		errorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
+
+	httpResponse(w, http.StatusOK, "Edit User Sukses", newUser)
 
 	//pesan := Pesan{"Sukses Update", 200}
 	//jsonData, err := json.Marshal(pesan)
@@ -342,37 +352,39 @@ func GetProfileFunc(w http.ResponseWriter, r *http.Request, param httprouter.Par
 	idString := param.ByName("id")
 	newUser.Id, err = strconv.Atoi(idString)
 	if err != nil {
-		fmt.Println("error converting string to int")
+		errorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	db, err := DBConn()
 	if err != nil {
-		//fmt.Println(err.Error())
-		//return
-		panic(err.Error())
+		errorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	defer db.Close()
 
 	//????		rows, err := db.Query("SELECT * FROM Employee WHERE id=? LIMIT 1", "a")
-	rows, err := db.Query("SELECT id,username,nickname  FROM user WHERE  id=? LIMIT 1", newUser.Id)
+	rows, err := db.Query("SELECT id, username, nickname FROM user WHERE id=? LIMIT 1", newUser.Id)
 	if err != nil {
-		panic(err.Error())
+		errorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	defer rows.Close()
 
-	var result []User
+	var result User
 
 	for rows.Next() {
-		var each = User{}
+		// var each = User{}
 
-		var err = rows.Scan(&each.Id, &each.UserName, &each.NickName)
+		var err = rows.Scan(&result.Id, &result.UserName, &result.NickName)
 		if err != nil {
-			panic(err.Error())
+			errorResponse(w, http.StatusBadRequest, err.Error())
+			return
 		}
 
-		result = append(result, each)
+		// result = append(result, each)
 	}
-	httpResponse(w, result)
+	httpResponse(w, http.StatusOK, "Sukses", result)
 
 	/*
 		var jsonData, errj = json.Marshal(result)
@@ -404,26 +416,28 @@ func UploadProfilePictFunc(w http.ResponseWriter, r *http.Request, _ httprouter.
 		defer db.Close()
 	*/
 	var (
-		newUser User2
+		newUser UserPicture
 		err     error
 	)
 
 	checkPost := checkPostHeader(r)
 	if checkPost != "" {
 		http.Error(w, checkPost, http.StatusUnsupportedMediaType)
+		return
 	}
 
 	bodyVal, err := io.ReadAll(r.Body)
 	if err != nil {
-		fmt.Println("error", err)
+		errorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	err = json.Unmarshal(bodyVal, &newUser)
 	if err != nil {
-		fmt.Println("error unmarshaling")
+		errorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
-	fmt.Println("test user ............." + newUser.UserName)
-	fmt.Println("test pict base 64 ............." + newUser.ProfilePicture)
+
 	//sementara tdk perlu cek ke database apakah username tsb ada atau tidak
 
 	//dikirim ke function base64Png untuk diconver kt file png dan disimpan di disk file dgn Id user sebagai filename.
@@ -440,7 +454,7 @@ func UploadProfilePictFunc(w http.ResponseWriter, r *http.Request, _ httprouter.
 func GetProfilePictFunc(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
 
 	var (
-		newUser User2
+		newUser UserPicture
 		err     error
 	)
 	// var newGambar [] Gambar
@@ -450,7 +464,8 @@ func GetProfilePictFunc(w http.ResponseWriter, r *http.Request, param httprouter
 	idString := param.ByName("id")
 	newUser.Id, err = strconv.Atoi(idString)
 	if err != nil {
-		fmt.Println("error converting string to int")
+		errorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	//fgetbase64= fungsi utk menkonversi disk file ke basecode 64 dan dikirim ke clien
@@ -458,7 +473,7 @@ func GetProfilePictFunc(w http.ResponseWriter, r *http.Request, param httprouter
 	//	newGambar[0] = fgetbase64(newUser.UserName)
 	//newUser.ProfilePicture = fgetbase64(newUser.UserName)
 
-	httpResponse(w, fgetbase64(strconv.Itoa(newUser.Id)))
+	httpResponse(w, http.StatusOK, "Sukses Get Profile Picture", fgetbase64(strconv.Itoa(newUser.Id)))
 	/*
 		w.Header().Set("Content-Type", "application/json")
 
@@ -624,23 +639,4 @@ func fgetbase64(fileName string) string {
 	//fmt.Println("Base64 string is:", imgBase64Str)
 
 	return imgBase64Str
-}
-
-// ---------------------------------------------------------------------------------------------------------
-// function to check correct user adding input (regular expression and non-empty field input)
-// ----------------------------------------------------------------------------------------------------------
-// sementara tdk dipakai,
-func checkFormValue(w http.ResponseWriter, r *http.Request, forms ...string) (res bool, errStr string) {
-
-	for _, form := range forms {
-		m, _ := regexp.MatchString("^[a-zA-Z]+$", r.FormValue(form))
-		if r.FormValue(form) == "" {
-			return false, "All forms must be completed"
-		}
-		if m == false {
-			return false, "Use only english letters if firstname,lastname forms"
-		}
-
-	}
-	return true, ""
 }

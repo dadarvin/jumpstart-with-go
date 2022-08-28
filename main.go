@@ -113,11 +113,11 @@ func checkPostHeader(r *http.Request) string {
 	return msg
 }
 
-func httpResponse(w http.ResponseWriter, m interface{}) {
+func httpResponse(w http.ResponseWriter, responseCode int, m interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 
-	if err := json.NewEncoder(w).Encode(&JsonResponse{Status: http.StatusOK, Data: m}); err != nil {
+	if err := json.NewEncoder(w).Encode(&JsonResponse{Status: responseCode, Data: m}); err != nil {
 		errorResponse(w, http.StatusInternalServerError, "Internal Server Error")
 	}
 }
@@ -171,8 +171,9 @@ func RegisterUserFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Param
 		http.Error(w, "failed inserting data : "+err.Error(), http.StatusInternalServerError) // return
 		return
 	}
+	var newUser_Response User
 
-	httpResponse(w, newUser)
+	httpResponse(w, http.StatusOK, newUser_Response)
 	//???   hrs respose, adlh  sukses register ..... ?????????????????????????????????????????????????????????????
 }
 

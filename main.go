@@ -15,12 +15,15 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/golang/gddo/httputil/header"
 	"golang.org/x/crypto/bcrypt"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/julienschmidt/httprouter"
+
+	"github.com/golang-jwt/jwt" //JWT
 )
 
 // DBConn make connection to database
@@ -29,6 +32,101 @@ func DBConn() (db *sql.DB, err error) {
 	db, err = sql.Open("mysql", "root@tcp(127.0.0.1:3306)/entry_task")
 
 	return
+}
+
+type Error struct {
+	IsError bool   `json:"isError"` //JWT
+	Message string `json:"message"`
+}
+
+// set error message in Error struct  // JWT
+func SetError(err Error, message string) Error {
+	err.IsError = true
+	err.Message = message
+	return err
+}
+
+type Token struct {
+	UserName    string `json:"username"` //JWT
+	TokenString string `json:"token"`
+}
+
+var (
+	secretkey string = "secretkeyjwt" //JWT
+)
+
+// Generate JWT token  //JWT
+// ----------------------------------------------------------------------
+func GenerateJWT(username string) (string, error) {
+	var mySigningKey = []byte(secretkey)
+	token := jwt.New(jwt.SigningMethodHS256)
+	claims := token.Claims.(jwt.MapClaims)
+	claims["authorized"] = true
+	claims["username"] = username
+	claims["exp"] = time.Now().Add(time.Minute * 3000000).Unix()
+
+	tokenString, err := token.SignedString(mySigningKey)
+	if err != nil {
+		fmt.Println("Something went Wrong: %s" + err.Error())
+		return "", err
+	}
+
+	return tokenString, nil //JWT
+}
+
+// check whether user is authorized or not  //JWT
+// -----------------------------------------------------------------------
+// func IsAuthorized(handler http.HandlerFunc) http.HandlerFunc {
+func IsAuthorized(handler httprouter.Handle) httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
+
+		if r.Header["Token"] == nil {
+			var err Error
+			err = SetError(err, "No Token Found")
+			json.NewEncoder(w).Encode(err)
+			return
+		}
+
+		var mySigningKey = []byte(secretkey)
+
+		//		token, err := jwt.Parse(r.Header["Token"][0], func(token *jwt.Token) (interface{}, error) {
+		token, err := jwt.Parse(r.Header["Token"][0], func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("there was an error in parsing token")
+			}
+			return mySigningKey, nil
+		})
+		if err != nil {
+			errorResponse(w, http.StatusUnauthorized, err.Error())
+			return
+		}
+
+		// if token.Valid {
+		// 	handler(w, r, param)
+		// 	return
+		// }
+		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+			value := fmt.Sprint(claims["username"])
+			fmt.Println("test claim username ..... " + value)
+			handler(w, r, param)
+			return
+		}
+		// if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		// 	if claims["role"] == "admin" {
+		// 		r.Header.Set("Role", "admin")
+		// 		handler.ServeHTTP(w, r)
+		// 		return		token, err := jwt.Parse(r.Header["Token"][0], func(token *jwt.Token) (interface{}, error) {
+
+		// 	} else if claims["role"] == "user" {
+		// 		r.Header.Set("Role", "user")
+		// 		handler.ServeHTTP(w, r)
+		// 		return
+
+		// 	}
+		// }
+
+		errorResponse(w, http.StatusUnauthorized, "Not Authorized")
+	}
 }
 
 // User struct for user data
@@ -68,16 +166,16 @@ func main() {
 	router := httprouter.New()
 
 	// GET
-	router.GET("/get-profile/:id", GetProfileFunc)
-	router.GET("/get-profile-pict/:id", GetProfilePictFunc)
+	router.GET("/get-profile/:id", IsAuthorized(GetProfileFunc))
+	router.GET("/get-profile-pict/:id", IsAuthorized(GetProfilePictFunc))
 
 	//POST
 	router.POST("/register", RegisterUserFunc)
 	router.POST("/login", LoginFunc)
-	router.POST("/uploadprofilepict", UploadProfilePictFunc)
+	router.POST("/uploadprofilepict", IsAuthorized(UploadProfilePictFunc))
 
 	//PUT
-	router.PUT("/change-nickname", EditUserFunc)
+	router.PUT("/change-nickname", IsAuthorized(EditUserFunc))
 
 	fmt.Println("Running Server in :8080......")
 	log.Fatal(http.ListenAndServe(":8080", router))
@@ -241,6 +339,13 @@ func LoginFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		return
 	}
 
+	validToken, err := GenerateJWT(each.UserName) //JWT , send UserName utk dimasukkan ke claim
+	if err != nil {
+		//		var err Error
+		//		err = SetError(err, "Failed to generate token")
+		errorResponse(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	// UserData := UserData{
 	// 	Id: each.Id,
 	// 	UserName: each.UserName,
@@ -249,10 +354,12 @@ func LoginFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 
 	// Return data user tanpa field password
 	userData := map[string]interface{}{
-		"id":       each.Id,
-		"username": each.UserName,
-		"nickname": each.NickName,
+		"id":          each.Id,
+		"username":    each.UserName,
+		"nickname":    each.NickName,
+		"tokenstring": validToken,
 	}
+
 	httpResponse(w, http.StatusOK, "Login Sukses", userData)
 	/*
 		// for _, each := range result {

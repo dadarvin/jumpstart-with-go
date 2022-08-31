@@ -9,10 +9,6 @@ var (
 	appConfig *Config
 )
 
-const (
-	DefaultConfigPath = "conf/"
-)
-
 type Config struct {
 	Environment string
 	AppName     string
@@ -59,6 +55,7 @@ func Init() {
 
 	// Init the config
 	appConfig = &Config{}
+	appConfig.initCommonConfig(c)
 	appConfig.initAuthConfig(c)
 	appConfig.initSqlDBConfig(c)
 }

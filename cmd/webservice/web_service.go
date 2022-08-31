@@ -3,10 +3,11 @@ package webservice
 import (
 	"context"
 	"entry_task/cmd/webservice/handler"
-	"entry_task/cmd/webservice/router"
+	m "entry_task/cmd/webservice/middleware"
 	"entry_task/internal/config"
 	"entry_task/internal/repo"
 	"entry_task/internal/usecase"
+	"github.com/julienschmidt/httprouter"
 	"log"
 	"net/http"
 	"time"
@@ -21,7 +22,7 @@ type Server struct {
 	handler *handler.Handler
 }
 
-func Start() (stopFunc func()) {
+func Init() (stopFunc func()) {
 	conf := config.Get()
 
 	// Initialize Repository
@@ -31,7 +32,7 @@ func Start() (stopFunc func()) {
 	userUC := usecase.InitDependencies(userRepo)
 
 	// Initialize Router for Handler
-	router := router.Init()
+	router := httprouter.New()
 
 	httpSrv := &http.Server{
 		Addr:    ":" + conf.HttpPort,
@@ -42,24 +43,40 @@ func Start() (stopFunc func()) {
 		srv:     httpSrv,
 		handler: handler.New(userUC),
 	}
+	server.Start(router)
 
 	go func() {
+		log.Println("Server running on", conf.HttpPort)
 		err := server.srv.ListenAndServe()
-		if err != nil {
-			log.Fatalln("Failed starting server on ", server.srv.Addr, err)
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatalln("failed starting web on", server.srv.Addr, err)
 		}
 	}()
 	return func() {
-		GracefulStop(server)
+		server.GracefulStop()
 	}
 }
 
-func GracefulStop(server *Server) (err error) {
+func (s *Server) Start(router *httprouter.Router) {
+	// GET
+	router.GET("/get-profile/:id", m.IsAuthorized(s.handler.GetProfileFunc))
+	router.GET("/get-profile-pict/:id", m.IsAuthorized(s.handler.GetProfilePictFunc))
+
+	//POST
+	router.POST("/register", s.handler.RegisterUserFunc)
+	router.POST("/login", s.handler.LoginFunc)
+	router.POST("/uploadprofilepict", m.IsAuthorized(s.handler.UploadProfilePictFunc))
+
+	//PUT
+	router.PUT("/change-nickname", m.IsAuthorized(s.handler.EditUserFunc))
+}
+
+func (s *Server) GracefulStop() (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), (15 * time.Second))
 	defer cancel()
 
-	log.Println("shuting down web on", server.srv.Addr)
-	err = server.srv.Shutdown(ctx)
+	log.Println("shuting down web on", s.srv.Addr)
+	err = s.srv.Shutdown(ctx)
 	if err != nil {
 		log.Fatalln("failed shutdown server", err)
 	}

@@ -37,6 +37,7 @@ func (h *Handler) RegisterUserFunc(w http.ResponseWriter, r *http.Request, _ htt
 	err = h.user.RegisterUser(newUser)
 	if err != nil {
 		httputil.ErrorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	httputil.HttpResponse(w, http.StatusOK, "Register Sukses", nil)
@@ -67,7 +68,7 @@ func (h *Handler) LoginFunc(w http.ResponseWriter, r *http.Request, _ httprouter
 		return
 	}
 
-	userData, err := h.user.AuthenticateUser(user.UserName, user.Password)
+	userData, err := h.user.AuthenticateUser(user.Id, user.Password)
 	if err != nil {
 		httputil.ErrorResponse(w, http.StatusBadRequest, err.Error())
 	}
@@ -124,7 +125,13 @@ func (h *Handler) GetProfileFunc(w http.ResponseWriter, _ *http.Request, param h
 		httputil.ErrorResponse(w, http.StatusBadRequest, err.Error())
 	}
 
-	httputil.HttpResponse(w, http.StatusOK, "Sukses", userData)
+	userProfile := user.User{
+		Id:       userData.Id,
+		UserName: userData.UserName,
+		NickName: userData.NickName,
+	}
+
+	httputil.HttpResponse(w, http.StatusOK, "Sukses", userProfile)
 }
 
 // ----------------------------------

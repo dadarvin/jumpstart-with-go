@@ -1,14 +1,13 @@
 package usecase
 
 import (
+	"entry_task/internal/config"
 	"entry_task/internal/model/user"
-	"entry_task/internal/util/httputil"
 	image2 "entry_task/internal/util/image"
 	"errors"
 	"fmt"
 	"github.com/golang-jwt/jwt"
 	"golang.org/x/crypto/bcrypt"
-	"net/http"
 	"strconv"
 	"time"
 )
@@ -24,7 +23,9 @@ func (u *UseCase) checkPasswordHash(password, hash string) bool {
 }
 
 func (u *UseCase) generateJWT(username string) (string, error) {
-	var mySigningKey = []byte(secretkey)
+	conf := config.Get()
+
+	var mySigningKey = []byte(conf.AuthConfig.JWTSecret)
 	token := jwt.New(jwt.SigningMethodHS256)
 	claims := token.Claims.(jwt.MapClaims)
 	claims["authorized"] = true
@@ -42,20 +43,13 @@ func (u *UseCase) generateJWT(username string) (string, error) {
 
 func (u *UseCase) RegisterUser(user user.User) error {
 	// hash password with bcrypt
-	hashedPass, err := u.hashPassword(user.Password)
+	var err error
+	user.Password, err = u.hashPassword(user.Password)
 	if err != nil {
 		return err
 	}
 
-	// connecting to database
-	db, err := DBConn()
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	// insert ke database (username uniq key, id sequance )
-	_, err = db.Exec("INSERT INTO user(username, nickname, password) VALUES (?, ?, ?) ", user.UserName, user.NickName, hashedPass)
+	err = u.ur.UpsertUser(user)
 	if err != nil {
 		return err
 	}
@@ -63,90 +57,49 @@ func (u *UseCase) RegisterUser(user user.User) error {
 	return err
 }
 
-func (u *UseCase) AuthenticateUser(username string, password string) (interface{}, error) {
+func (u *UseCase) AuthenticateUser(userID int, password string) (interface{}, error) {
 	// connect ke database
-	db, err := DBConn()
+	user, err := u.ur.GetUser(userID)
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 
-	rows, err := db.Query("SELECT id, username, nickname, password FROM user WHERE username=? LIMIT 1", username)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var each user.User
-	for rows.Next() {
-		var err = rows.Scan(&each.Id, &each.UserName, &each.NickName, &each.Password)
-		if err != nil {
-			return nil, err
-		}
-
-		// result = append(result, each)
-	}
-
-	if each.UserName == "" {
+	if user.UserName == "" {
 		return nil, errors.New("username not found")
 	}
 
-	match := u.checkPasswordHash(password, each.Password)
+	match := u.checkPasswordHash(password, user.Password)
 	if !match {
 		return nil, errors.New("password incorrect")
 	}
 
-	validToken, err := u.generateJWT(each.UserName) //JWT , send UserName utk dimasukkan ke claim
+	validToken, err := u.generateJWT(user.UserName) //JWT , send UserName utk dimasukkan ke claim
 	if err != nil {
 		return nil, err
 	}
 
 	userData := map[string]interface{}{
-		"id":          each.Id,
-		"username":    each.UserName,
-		"nickname":    each.NickName,
+		"id":          user.Id,
+		"username":    user.UserName,
+		"nickname":    user.NickName,
 		"tokenstring": validToken,
 	}
 	return userData, nil
 }
 
 func (u *UseCase) UpdateUser(user user.User) error {
-	db, err := DBConn()
-	if err != nil {
-		httputil.ErrorResponse(w, http.StatusBadRequest, err.Error())
-		return err
-	}
-	defer db.Close()
-
-	_, err = db.Exec("UPDATE user SET nickname=? WHERE id=?", user.NickName, user.Id)
+	err := u.ur.UpsertUser(user)
 	if err != nil {
 		return err
 	}
 
-	return err
+	return nil
 }
 
 func (u *UseCase) GetUserByID(userID int) (user.User, error) {
-	db, err := DBConn()
+	userData, err := u.ur.GetUser(userID)
 	if err != nil {
-		return user.User{}, err
-	}
-	defer db.Close()
-
-	//????		rows, err := db.Query("SELECT * FROM Employee WHERE id=? LIMIT 1", "a")
-	rows, err := db.Query("SELECT id, username, nickname FROM user WHERE id=? LIMIT 1", userID)
-	if err != nil {
-		return user.User{}, err
-	}
-	defer rows.Close()
-
-	var userData user.User
-
-	for rows.Next() {
-		var err = rows.Scan(&userData.Id, &userData.UserName, &userData.NickName)
-		if err != nil {
-			return user.User{}, err
-		}
+		return user.User{}, nil
 	}
 
 	return userData, nil
@@ -159,20 +112,13 @@ func (u *UseCase) UploadUserPic(id int, username string, picData string) error {
 		return err
 	}
 
-	db, err := DBConn()
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
 	picName := "Pict_" + username
-	rows, err := db.Query("UPDATE user SET profile_picture = ? WHERE id = ?", picName, id)
+	err = u.ur.UpdateUserPic(picName, id)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
 
-	return err
+	return nil
 }
 
 func (u *UseCase) GetUserPicByID(userID int) (string, error) {

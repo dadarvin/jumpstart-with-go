@@ -1,6 +1,0 @@
-appname:
-httpport:
-database:
-  mysql:
-    master: "devel:devel@tcp(127.0.0.1:3306)/entry_task"
-    slave:

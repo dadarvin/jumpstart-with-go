@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"entry_task/cmd/webservice"
+	"entry_task/internal/config"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -13,18 +15,54 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
-	"github.com/golang/gddo/httputil/header"
-	"golang.org/x/crypto/bcrypt"
-
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/golang/gddo/httputil/header"
 	"github.com/julienschmidt/httprouter"
 
-	"github.com/golang-jwt/jwt" //JWT
+	"github.com/golang-jwt/jwt"
 )
+
+func main() {
+	var stopFunc func()
+
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGINT, syscall.SIGKILL, syscall.SIGQUIT)
+
+	config.Init()
+	stopFunc = webservice.Start()
+
+	for {
+		<-c
+		log.Println("terminate service")
+		stopFunc()
+		os.Exit(0)
+	}
+}
+
+func main2() {
+	router := httprouter.New()
+
+	// GET
+	router.GET("/get-profile/:id", IsAuthorized(GetProfileFunc))
+	router.GET("/get-profile-pict/:id", IsAuthorized(GetProfilePictFunc))
+
+	//POST
+	router.POST("/register", RegisterUserFunc)
+	router.POST("/login", LoginFunc)
+	router.POST("/uploadprofilepict", IsAuthorized(UploadProfilePictFunc))
+
+	//PUT
+	router.PUT("/change-nickname", IsAuthorized(EditUserFunc))
+
+	fmt.Println("Running Server in :8080......")
+	log.Fatal(http.ListenAndServe(":8080", router))
+}
 
 // DBConn make connection to database
 func DBConn() (db *sql.DB, err error) {
@@ -32,18 +70,6 @@ func DBConn() (db *sql.DB, err error) {
 	db, err = sql.Open("mysql", "root@tcp(127.0.0.1:3306)/entry_task")
 
 	return
-}
-
-type Error struct {
-	IsError bool   `json:"isError"` //JWT
-	Message string `json:"message"`
-}
-
-// set error message in Error struct  // JWT
-func SetError(err Error, message string) Error {
-	err.IsError = true
-	err.Message = message
-	return err
 }
 
 type Token struct {
@@ -81,9 +107,7 @@ func IsAuthorized(handler httprouter.Handle) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
 
 		if r.Header["Token"] == nil {
-			var err Error
-			err = SetError(err, "No Token Found")
-			json.NewEncoder(w).Encode(err)
+			errorResponse(w, http.StatusUnauthorized, "No Token Found")
 			return
 		}
 
@@ -160,35 +184,6 @@ type JsonErrorResponse struct {
 type ApiResponse struct {
 	Status  int    `json:"status"`
 	Message string `json:"message"`
-}
-
-func main() {
-	router := httprouter.New()
-
-	// GET
-	router.GET("/get-profile/:id", IsAuthorized(GetProfileFunc))
-	router.GET("/get-profile-pict/:id", IsAuthorized(GetProfilePictFunc))
-
-	//POST
-	router.POST("/register", RegisterUserFunc)
-	router.POST("/login", LoginFunc)
-	router.POST("/uploadprofilepict", IsAuthorized(UploadProfilePictFunc))
-
-	//PUT
-	router.PUT("/change-nickname", IsAuthorized(EditUserFunc))
-
-	fmt.Println("Running Server in :8080......")
-	log.Fatal(http.ListenAndServe(":8080", router))
-}
-
-func HashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
-	return string(bytes), err
-}
-
-func CheckPasswordHash(password, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	return err == nil
 }
 
 func checkPostHeader(r *http.Request) string {
@@ -551,7 +546,6 @@ func UploadProfilePictFunc(w http.ResponseWriter, r *http.Request, _ httprouter.
 	base64toPng(strconv.Itoa(newUser.Id), newUser.ProfilePicture)
 
 	//return
-
 }
 
 // GetProfilePictFunc, pict stlh di decode di write/dikirim ke user dgn json

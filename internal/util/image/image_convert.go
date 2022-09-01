@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"image"
+	_ "image/jpeg"
 	"image/png"
 	"log"
 	"os"
@@ -27,7 +28,7 @@ func Base64toPng(fIdUser string, fPicture string) error {
 
 	//Encode from image format to writer
 	//fUser=nama user yg dijadinakan file name (nama user unique)
-	pngFilename := "Pict_" + fIdUser + ".png"
+	pngFilename := "assets/Pict_" + fIdUser + ".png"
 
 	f, err := os.OpenFile(pngFilename, os.O_WRONLY|os.O_CREATE, 0777)
 	if err != nil {
@@ -49,7 +50,7 @@ func Base64toPng(fIdUser string, fPicture string) error {
 // fungsi utk mengamfile file berdasarkan nama user, utk diconversi kebase64cide dan dikirim ke clien
 func Fgetbase64(fileName string) (string, error) {
 
-	var filename = "Pict_" + fileName + ".png"
+	var filename = "assets/Pict_" + fileName + ".png"
 	imgFile, err := os.Open(filename)
 
 	if err != nil {

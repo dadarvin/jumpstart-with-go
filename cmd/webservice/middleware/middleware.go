@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"entry_task/internal/config"
 	"entry_task/internal/util/httputil"
 	"fmt"
 	"github.com/golang-jwt/jwt"
@@ -10,16 +9,14 @@ import (
 )
 
 // IsAuthorized check whether user is authorized or not
-func IsAuthorized(handler httprouter.Handle) httprouter.Handle {
+func (m *Middleware) IsAuthorized(handler httprouter.Handle) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
-		conf := config.Get()
-
 		if r.Header["Token"] == nil {
 			httputil.ErrorResponse(w, http.StatusUnauthorized, "No Token Found")
 			return
 		}
 
-		var mySigningKey = []byte(conf.AuthConfig.JWTSecret)
+		var mySigningKey = []byte(m.secret)
 
 		token, err := jwt.Parse(r.Header["Token"][0], func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {

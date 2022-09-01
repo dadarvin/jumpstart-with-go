@@ -49,7 +49,18 @@ func (u *UseCase) RegisterUser(user user.User) error {
 		return err
 	}
 
-	err = u.ur.UpsertUser(user)
+	tx, err := u.ur.CreateTx()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	err = u.ur.UpsertUser(user, tx)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
 	if err != nil {
 		return err
 	}
@@ -57,9 +68,9 @@ func (u *UseCase) RegisterUser(user user.User) error {
 	return err
 }
 
-func (u *UseCase) AuthenticateUser(userID int, password string) (interface{}, error) {
+func (u *UseCase) AuthenticateUser(username string, password string) (interface{}, error) {
 	// connect ke database
-	user, err := u.ur.GetUser(userID)
+	user, err := u.ur.GetUserByName(username)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +99,19 @@ func (u *UseCase) AuthenticateUser(userID int, password string) (interface{}, er
 }
 
 func (u *UseCase) UpdateUser(user user.User) error {
-	err := u.ur.UpsertUser(user)
+	tx, err := u.ur.CreateTx()
+	if err != nil {
+		return err
+	}
+
+	defer tx.Rollback()
+
+	err = u.ur.UpsertUser(user, tx)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
 	if err != nil {
 		return err
 	}
@@ -97,7 +120,7 @@ func (u *UseCase) UpdateUser(user user.User) error {
 }
 
 func (u *UseCase) GetUserByID(userID int) (user.User, error) {
-	userData, err := u.ur.GetUser(userID)
+	userData, err := u.ur.GetUserByID(userID)
 	if err != nil {
 		return user.User{}, nil
 	}
@@ -112,8 +135,17 @@ func (u *UseCase) UploadUserPic(id int, username string, picData string) error {
 		return err
 	}
 
+	tx, err := u.ur.CreateTx()
+
+	defer tx.Rollback()
+
 	picName := "Pict_" + username
-	err = u.ur.UpdateUserPic(picName, id)
+	err = u.ur.UpdateUserPic(picName, id, tx)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
 	if err != nil {
 		return err
 	}

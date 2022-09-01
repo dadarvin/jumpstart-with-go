@@ -3,7 +3,7 @@ package webservice
 import (
 	"context"
 	"entry_task/cmd/webservice/handler"
-	m "entry_task/cmd/webservice/middleware"
+	"entry_task/cmd/webservice/middleware"
 	"entry_task/internal/config"
 	"entry_task/internal/repo"
 	"entry_task/internal/usecase"
@@ -18,8 +18,9 @@ import (
 //)
 
 type Server struct {
-	srv     *http.Server
-	handler *handler.Handler
+	srv        *http.Server
+	handler    *handler.Handler
+	middleware *middleware.Middleware
 }
 
 func Init() (stopFunc func()) {
@@ -40,8 +41,9 @@ func Init() (stopFunc func()) {
 	}
 
 	server := &Server{
-		srv:     httpSrv,
-		handler: handler.New(userUC),
+		srv:        httpSrv,
+		handler:    handler.New(userUC),
+		middleware: middleware.New(conf.AuthConfig.JWTSecret),
 	}
 	server.Start(router)
 
@@ -59,16 +61,16 @@ func Init() (stopFunc func()) {
 
 func (s *Server) Start(router *httprouter.Router) {
 	// GET
-	router.GET("/get-profile/:id", m.IsAuthorized(s.handler.GetProfileFunc))
-	router.GET("/get-profile-pict/:id", m.IsAuthorized(s.handler.GetProfilePictFunc))
+	router.GET("/get-profile/:id", s.middleware.IsAuthorized(s.handler.GetProfileFunc))
+	router.GET("/get-profile-pict/:id", s.middleware.IsAuthorized(s.handler.GetProfilePictFunc))
 
 	//POST
 	router.POST("/register", s.handler.RegisterUserFunc)
 	router.POST("/login", s.handler.LoginFunc)
-	router.POST("/uploadprofilepict", m.IsAuthorized(s.handler.UploadProfilePictFunc))
+	router.POST("/uploadprofilepict", s.middleware.IsAuthorized(s.handler.UploadProfilePictFunc))
 
 	//PUT
-	router.PUT("/change-nickname", m.IsAuthorized(s.handler.EditUserFunc))
+	router.PUT("/change-nickname", s.middleware.IsAuthorized(s.handler.EditUserFunc))
 }
 
 func (s *Server) GracefulStop() (err error) {

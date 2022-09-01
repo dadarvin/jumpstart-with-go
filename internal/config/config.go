@@ -9,6 +9,7 @@ var (
 	appConfig *Config
 )
 
+// Config config struct
 type Config struct {
 	Environment string
 	AppName     string
@@ -19,6 +20,7 @@ type Config struct {
 	DBSlave    *sqlDB
 }
 
+// Config config struct for .ini mapping
 type configIni struct {
 	// General config
 	AppName     string `ini:"appname"`
@@ -38,9 +40,10 @@ type configIni struct {
 	DBSlavePass  string `ini:"dbslave_pass"`
 	DBSlaveHost  string `ini:"dbslave_host"`
 	DBSlavePort  string `ini:"dbslave_port"`
-	DBSlaveName  string `ini:"dbslave_name"`
+	DBSlaveName  string `ini:"d	bslave_name"`
 }
 
+// Init init the config mapping
 func Init() {
 	c := &configIni{}
 
@@ -60,6 +63,7 @@ func Init() {
 	appConfig.initSqlDBConfig(c)
 }
 
+// Get getting config data
 func Get() *Config {
 	return appConfig
 }

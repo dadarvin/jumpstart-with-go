@@ -68,9 +68,10 @@ func (h *Handler) LoginFunc(w http.ResponseWriter, r *http.Request, _ httprouter
 		return
 	}
 
-	userData, err := h.user.AuthenticateUser(user.Id, user.Password)
+	userData, err := h.user.AuthenticateUser(user.UserName, user.Password)
 	if err != nil {
 		httputil.ErrorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	httputil.HttpResponse(w, http.StatusOK, "Login Sukses", userData)
@@ -78,7 +79,6 @@ func (h *Handler) LoginFunc(w http.ResponseWriter, r *http.Request, _ httprouter
 
 // EditUserFunc Edit user nickname
 // @Router /edit-user
-// -------------------------------------------------------------------------------------------------
 func (h *Handler) EditUserFunc(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var user user.User
 
@@ -97,6 +97,7 @@ func (h *Handler) EditUserFunc(w http.ResponseWriter, r *http.Request, _ httprou
 	err = h.user.UpdateUser(user)
 	if err != nil {
 		httputil.ErrorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	httputil.HttpResponse(w, http.StatusOK, "Edit User Sukses", user)
@@ -106,7 +107,6 @@ func (h *Handler) EditUserFunc(w http.ResponseWriter, r *http.Request, _ httprou
 // @Routes /user-profile/:id
 // @Params id queryParam int
 // jika username tdk ditemukan, return null
-// -----------------------------------------------------------------------------------------------
 func (h *Handler) GetProfileFunc(w http.ResponseWriter, _ *http.Request, param httprouter.Params) {
 	var (
 		userID int
@@ -123,12 +123,13 @@ func (h *Handler) GetProfileFunc(w http.ResponseWriter, _ *http.Request, param h
 	userData, err := h.user.GetUserByID(userID)
 	if err != nil {
 		httputil.ErrorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
-	userProfile := user.User{
-		Id:       userData.Id,
-		UserName: userData.UserName,
-		NickName: userData.NickName,
+	userProfile := map[string]interface{}{
+		"id":       userData.Id,
+		"username": userData.UserName,
+		"nickname": userData.NickName,
 	}
 
 	httputil.HttpResponse(w, http.StatusOK, "Sukses", userProfile)
@@ -171,7 +172,7 @@ func (h *Handler) UploadProfilePictFunc(w http.ResponseWriter, r *http.Request, 
 
 }
 
-// GetProfilePictFunc, pict stlh di decode di write/dikirim ke user dgn json
+// GetProfilePictFunc pict stlh di decode di write/dikirim ke user dgn json
 // @Routes /get-profile-pict/:id
 // @Params id parameter id user int
 // jika username tdk ditemukan, return null
@@ -192,6 +193,7 @@ func (h *Handler) GetProfilePictFunc(w http.ResponseWriter, r *http.Request, par
 	pic, err := h.user.GetUserPicByID(userID)
 	if err != nil {
 		httputil.ErrorResponse(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	httputil.HttpResponse(w, http.StatusOK, "success get user profile picture", pic)

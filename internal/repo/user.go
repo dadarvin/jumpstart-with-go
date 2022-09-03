@@ -19,9 +19,18 @@ func (r *Repo) CreateTx() (*sql.Tx, error) {
 func (r *Repo) UpsertUser(user user.User, tx *sql.Tx) error {
 	var err error
 	if user.Id > 0 {
-		_, err = tx.Query("UPDATE user SET nickname=? WHERE id=?", user.NickName, user.Id)
+		if tx != nil {
+			_, err = tx.Exec("UPDATE user SET nickname=? WHERE id=?", user.NickName, user.Id)
+		} else {
+			_, err = r.db.Master.Exec("UPDATE user SET nickname=? WHERE id=?", user.NickName, user.Id)
+		}
+
 	} else {
-		_, err = tx.Query("INSERT INTO user(username, nickname, password) VALUES (?, ?, ?) ", user.UserName, user.NickName, user.Password)
+		if tx != nil {
+			_, err = tx.Exec("INSERT INTO user(username, nickname, password) VALUES (?, ?, ?) ", user.UserName, user.NickName, user.Password)
+		} else {
+			_, err = r.db.Master.Exec("INSERT INTO user(username, nickname, password) VALUES (?, ?, ?) ", user.UserName, user.NickName, user.Password)
+		}
 	}
 
 	if err != nil {
@@ -73,7 +82,12 @@ func (r *Repo) GetUserByName(username string) (user.User, error) {
 // UpdateUserPic update user picture
 func (r *Repo) UpdateUserPic(picName string, userID int, tx *sql.Tx) error {
 	var err error
-	_, err = tx.Query("UPDATE user SET profile_picture = ? WHERE id = ?", picName, userID)
+
+	if tx != nil {
+		_, err = tx.Exec("UPDATE user SET profile_picture = ? WHERE id = ?", picName, userID)
+	} else {
+		_, err = r.db.Master.Exec("UPDATE user SET profile_picture = ? WHERE id = ?", picName, userID)
+	}
 
 	if err != nil {
 		return err

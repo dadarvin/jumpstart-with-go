@@ -14,7 +14,7 @@ type DB struct {
 func InitDatabase() *DB {
 	conf := config.Get()
 
-	if conf.DBMaster == nil || conf.DBSlave == nil {
+	if conf.DBMaster == nil {
 		log.Fatalf("failed to get DB config")
 	}
 

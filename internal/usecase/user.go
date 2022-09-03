@@ -138,7 +138,6 @@ func (u *UseCase) UploadUserPic(id int, username string, picData string) error {
 	tx, err := u.ur.CreateTx()
 
 	defer tx.Rollback()
-
 	picName := "Pict_" + username
 	err = u.ur.UpdateUserPic(picName, id, tx)
 	if err != nil {

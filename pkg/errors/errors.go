@@ -7,6 +7,7 @@ var (
 	ErrUnknown           = errors.New("internal server error")
 	ErrEncode            = errors.New("encode message error")
 	ErrEmptyResponseData = errors.New("empty response data")
+	ErrTransaction       = errors.New("error creating transaction")
 	// client side error
 	ErrBadRequest                = errors.New("bad request")
 	ErrMissingMandatoryParameter = errors.New("missing mandatory parameter")
@@ -20,4 +21,6 @@ var (
 	ErrDatabase  = errors.New("database error")
 	ErrHost      = errors.New("host error")
 	ErrHostEmail = errors.New("email error")
+	// usecase error
+	ErrUsecase = errors.New("usecase error")
 )

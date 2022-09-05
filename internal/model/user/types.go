@@ -11,6 +11,6 @@ type User struct {
 // UserPicture struct for containing basecode64 from client to convert into base64 format
 type UserPicture struct {
 	Id             int    `json:"id"`
-	UserName       string `json:"nickname"`
+	UserName       string `json:"username"`
 	ProfilePicture string `json:"profilepicture"`
 }

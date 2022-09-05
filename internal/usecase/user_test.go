@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"entry_task/internal/model/user"
+	errors2 "entry_task/pkg/errors"
 	"errors"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/golang/mock/gomock"
@@ -48,6 +49,49 @@ func TestUseCase_AuthenticateUser(t *testing.T) {
 				"tokenstring": "some.jwt.value.123",
 			},
 			wantErr: false,
+		},
+		{
+			name: "Failed - Empty Username",
+			args: args{
+				username: userData.UserName,
+				password: "testPass",
+			},
+			mock: func(a args, mock *MockuserRepo) {
+				mock.EXPECT().GetUserByName(a.username).
+					Return(user.User{
+						Id:       0,
+						UserName: "",
+					}, nil)
+			},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name: "Failed - Fail getting user name",
+			args: args{
+				username: "userTest",
+				password: "testPass",
+			},
+			mock: func(a args, mock *MockuserRepo) {
+				mock.EXPECT().GetUserByName(a.username).Return(user.User{}, errors2.ErrUsecase)
+			},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name: "Failed - Fail generating jwt",
+			args: args{
+				username: userData.UserName,
+				password: "testPass",
+			},
+			mock: func(a args, mock *MockuserRepo) {
+				mock.EXPECT().GetUserByName(a.username).
+					Return(userData, nil)
+				mock.EXPECT().GetJWT(a.username).
+					Return("", errors2.ErrUsecase)
+			},
+			want:    nil,
+			wantErr: true,
 		},
 	}
 
@@ -107,6 +151,32 @@ func TestUseCase_RegisterUser(t *testing.T) {
 				mock.EXPECT().UpsertUser(gomock.Any(), tx).Return(nil)
 			},
 			wantErr: false,
+		},
+		{
+			name: "Failed creating Tx",
+			args: args{
+				user: user.User{},
+			},
+			mock: func(a args, mock *MockuserRepo) {
+				mock.EXPECT().CreateTx().Return(nil, errors2.ErrTransaction)
+			},
+			wantErr: true,
+		},
+		{
+			name: "Failed usecase",
+			args: args{
+				user: user.User{},
+			},
+			mock: func(a args, mock *MockuserRepo) {
+				db, dbMock, _ := sqlmock.New()
+				dbMock.ExpectBegin()
+				tx, _ := db.Begin()
+				dbMock.ExpectCommit()
+
+				mock.EXPECT().CreateTx().Return(tx, nil)
+				mock.EXPECT().UpsertUser(gomock.Any(), gomock.Any()).Return(errors2.ErrUsecase)
+			},
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
@@ -261,6 +331,32 @@ func TestUseCase_UpdateUser(t *testing.T) {
 				mock.EXPECT().UpsertUser(gomock.Any(), tx).Return(nil)
 			},
 			wantErr: false,
+		},
+		{
+			name: "Failed - creating transaction",
+			args: args{
+				user: userData,
+			},
+			mock: func(a args, mock *MockuserRepo) {
+				mock.EXPECT().CreateTx().Return(nil, errors2.ErrTransaction)
+			},
+			wantErr: true,
+		},
+		{
+			name: "Failed - updating user",
+			args: args{
+				user: userData,
+			},
+			mock: func(a args, mock *MockuserRepo) {
+				db, dbMock, _ := sqlmock.New()
+				dbMock.ExpectBegin()
+				tx, _ := db.Begin()
+				dbMock.ExpectCommit()
+
+				mock.EXPECT().CreateTx().Return(tx, nil)
+				mock.EXPECT().UpsertUser(gomock.Any(), tx).Return(errors2.ErrUsecase)
+			},
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {

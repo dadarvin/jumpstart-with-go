@@ -155,10 +155,9 @@ func (h *Handler) UploadProfilePictFunc() httprouter.Handle {
 
 		checkPost := httputil.CheckPostHeader(r)
 		if checkPost != "" {
-			http.Error(w, checkPost, http.StatusUnsupportedMediaType)
+			httputil.ErrorResponse(w, http.StatusUnsupportedMediaType, " Harus menggunakan POST")
 			return
 		}
-
 		bodyVal, err := io.ReadAll(r.Body)
 		if err != nil {
 			httputil.ErrorResponse(w, http.StatusBadRequest, err.Error())
@@ -194,11 +193,7 @@ func (h *Handler) GetProfilePictFunc() httprouter.Handle {
 		)
 
 		idString := param.ByName("id")
-		userID, err = strconv.Atoi(idString)
-		if err != nil {
-			httputil.ErrorResponse(w, http.StatusBadRequest, err.Error())
-			return
-		}
+		userID, _ = strconv.Atoi(idString)
 
 		pic, err := h.user.GetUserPicByID(userID)
 		if err != nil {

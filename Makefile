@@ -9,6 +9,6 @@ dev:
 	@go run main.go
 
 test:
-	@echo "{NOW} == Testing Projects"
+	@echo "${NOW} == Testing Projects"
 	@go test ./... -cover -race -short | tee test.out
 	@.dev/test.sh test.out 15

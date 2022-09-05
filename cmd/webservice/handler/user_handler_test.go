@@ -4,6 +4,7 @@ import (
 	"entry_task/internal/model/user"
 	"entry_task/internal/util/testutil"
 	"entry_task/pkg/dto/base"
+	errors2 "entry_task/pkg/errors"
 	"errors"
 	"fmt"
 	"github.com/golang/mock/gomock"
@@ -17,13 +18,6 @@ func TestHandler_EditUserFunc(t *testing.T) {
 		path string
 		body interface{}
 	}
-
-	//userData := user.User{
-	//	Id:       1,
-	//	UserName: "test",
-	//	NickName: "testName",
-	//	Password: "testPass",
-	//}
 
 	tests := []struct {
 		name string
@@ -150,31 +144,70 @@ func TestHandler_GetProfileFunc(t *testing.T) {
 	}
 }
 
-//	func TestHandler_GetProfilePictFunc(t *testing.T) {
-//		type fields struct {
-//			user cmd.UserUseCase
-//		}
-//		type args struct {
-//			w     http.ResponseWriter
-//			r     *http.Request
-//			param httprouter.Params
-//		}
-//		tests := []struct {
-//			name   string
-//			fields fields
-//			args   args
-//		}{
-//			// TODO: Add test cases.
-//		}
-//		for _, tt := range tests {
-//			t.Run(tt.name, func(t *testing.T) {
-//				h := &Handler{
-//					user: tt.fields.user,
-//				}
-//				h.GetProfilePictFunc(tt.args.w, tt.args.r, tt.args.param)
-//			})
-//		}
-//	}
+func TestHandler_GetProfilePictFunc(t *testing.T) {
+	type args struct {
+		path   string
+		userID int
+	}
+	tests := []struct {
+		name string
+		args args
+		mock func(a args, mock *MockUserUseCase)
+		want func(t *testing.T, result *base.JsonResponse, status int)
+	}{
+		{
+			name: "Success",
+			args: args{
+				path:   "/get-profile-pict/%d",
+				userID: 1,
+			},
+			mock: func(a args, mock *MockUserUseCase) {
+				mock.EXPECT().GetUserPicByID(gomock.Any()).Return("pictureData", nil)
+			},
+			want: func(t *testing.T, result *base.JsonResponse, status int) {
+				assert.Equal(t, http.StatusOK, status)
+			},
+		},
+		{
+			name: "Failed usecase",
+			args: args{
+				path:   "/get-profile-pict/%d",
+				userID: 1,
+			},
+			mock: func(a args, mock *MockUserUseCase) {
+				mock.EXPECT().GetUserPicByID(gomock.Any()).Return("", errors2.ErrUsecase)
+			},
+			want: func(t *testing.T, result *base.JsonResponse, status int) {
+				assert.Equal(t, http.StatusBadRequest, status)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockUser := NewMockUserUseCase(ctrl)
+			h := &Handler{
+				user: mockUser,
+			}
+
+			tt.mock(tt.args, mockUser)
+
+			fmt.Println(fmt.Sprintf(tt.args.path, tt.args.userID))
+			rr := testutil.NewRequestRecorder(t,
+				h.GetProfilePictFunc(), http.MethodGet,
+				fmt.Sprintf(tt.args.path, tt.args.userID),
+			)
+
+			var resp base.JsonResponse
+
+			testutil.ParseResponse(t, rr, &resp)
+			tt.want(t, &resp, rr.Code)
+		})
+	}
+}
+
 func TestHandler_LoginFunc(t *testing.T) {
 	type args struct {
 		path   string
@@ -252,7 +285,7 @@ func TestHandler_LoginFunc(t *testing.T) {
 			tt.mock(mockUser)
 
 			rr := testutil.NewRequestRecorder(t,
-				h.LoginFunc(), http.MethodPut,
+				h.LoginFunc(), http.MethodPost,
 				tt.args.path,
 				testutil.WithBody(tt.args.body),
 				testutil.WithRequestHeader(tt.args.header),
@@ -268,8 +301,9 @@ func TestHandler_LoginFunc(t *testing.T) {
 
 func TestHandler_RegisterUserFunc(t *testing.T) {
 	type args struct {
-		path string
-		body interface{}
+		path   string
+		header map[string]string
+		body   interface{}
 	}
 	tests := []struct {
 		name string
@@ -281,6 +315,9 @@ func TestHandler_RegisterUserFunc(t *testing.T) {
 			name: "Success",
 			args: args{
 				path: "/register",
+				header: map[string]string{
+					"Content-Type": "application/json",
+				},
 				body: &user.User{},
 			},
 			mock: func(mock *MockUserUseCase) {
@@ -294,6 +331,9 @@ func TestHandler_RegisterUserFunc(t *testing.T) {
 			name: "Failed Usecase",
 			args: args{
 				path: "/register",
+				header: map[string]string{
+					"Content-Type": "application/json",
+				},
 				body: &user.User{},
 			},
 			mock: func(mock *MockUserUseCase) {
@@ -301,6 +341,21 @@ func TestHandler_RegisterUserFunc(t *testing.T) {
 			},
 			want: func(t *testing.T, result *base.JsonResponse, status int) {
 				assert.Equal(t, http.StatusBadRequest, status)
+			},
+		},
+		{
+			name: "Failed Content Type",
+			args: args{
+				path: "/register",
+				header: map[string]string{
+					"Content-Type": "FormValue",
+				},
+				body: nil,
+			},
+			mock: func(mock *MockUserUseCase) {
+			},
+			want: func(t *testing.T, result *base.JsonResponse, status int) {
+				assert.Equal(t, http.StatusUnsupportedMediaType, status)
 			},
 		},
 	}
@@ -317,13 +372,13 @@ func TestHandler_RegisterUserFunc(t *testing.T) {
 			tt.mock(mockUser)
 
 			rr := testutil.NewRequestRecorder(t,
-				h.RegisterUserFunc(), http.MethodPut,
+				h.RegisterUserFunc(), http.MethodPost,
 				tt.args.path,
 				testutil.WithBody(tt.args.body),
+				testutil.WithRequestHeader(tt.args.header),
 			)
 
 			var resp base.JsonResponse
-
 			testutil.ParseResponse(t, rr, &resp)
 			tt.want(t, &resp, rr.Code)
 		})
@@ -332,8 +387,9 @@ func TestHandler_RegisterUserFunc(t *testing.T) {
 
 func TestHandler_UploadProfilePictFunc(t *testing.T) {
 	type args struct {
-		path string
-		body interface{}
+		path   string
+		header map[string]string
+		body   interface{}
 	}
 
 	tests := []struct {
@@ -346,6 +402,9 @@ func TestHandler_UploadProfilePictFunc(t *testing.T) {
 			name: "Success",
 			args: args{
 				path: "/uploadprofilepict",
+				header: map[string]string{
+					"Content-Type": "application/json",
+				},
 				body: &user.UserPicture{},
 			},
 			mock: func(mock *MockUserUseCase) {
@@ -359,6 +418,9 @@ func TestHandler_UploadProfilePictFunc(t *testing.T) {
 			name: "Failed Usecase",
 			args: args{
 				path: "/uploadprofilepict",
+				header: map[string]string{
+					"Content-Type": "application/json",
+				},
 				body: &user.UserPicture{},
 			},
 			mock: func(mock *MockUserUseCase) {
@@ -366,6 +428,20 @@ func TestHandler_UploadProfilePictFunc(t *testing.T) {
 			},
 			want: func(t *testing.T, result *base.JsonResponse, status int) {
 				assert.Equal(t, http.StatusBadRequest, status)
+			},
+		},
+		{
+			name: "Failed Content type",
+			args: args{
+				path: "/uploadprofilepict",
+				header: map[string]string{
+					"Content-Type": "applications",
+				},
+				body: nil,
+			},
+			mock: func(mock *MockUserUseCase) {},
+			want: func(t *testing.T, result *base.JsonResponse, status int) {
+				assert.Equal(t, http.StatusUnsupportedMediaType, status)
 			},
 		},
 	}
@@ -385,6 +461,7 @@ func TestHandler_UploadProfilePictFunc(t *testing.T) {
 				h.UploadProfilePictFunc(), http.MethodPut,
 				tt.args.path,
 				testutil.WithBody(tt.args.body),
+				testutil.WithRequestHeader(tt.args.header),
 			)
 
 			var resp base.JsonResponse

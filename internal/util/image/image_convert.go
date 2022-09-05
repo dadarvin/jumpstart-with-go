@@ -5,16 +5,13 @@ import (
 	"encoding/base64"
 	_ "image/jpeg"
 	"os"
-	"path/filepath"
 )
 
 // fgetbase64 Gets base64 string of an existing JPEG file
 // fungsi utk mengamfile file berdasarkan nama user, utk diconversi kebase64cide dan dikirim ke clien
 func Fgetbase64(fileName string) (string, error) {
-
-	var filename = filepath.Dir("assets/Pict_" + fileName + ".png")
+	filename := "assets/Pict_" + fileName + ".png"
 	imgFile, err := os.Open(filename)
-
 	if err != nil {
 		return "", err
 	}

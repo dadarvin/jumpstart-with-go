@@ -55,7 +55,8 @@ then
     done <<< "$percentage_success_non_percent"
 fi
 
-test_count=$(($percentage_success_count + $no_test_count))
+#test_count=$(($percentage_success_count + $no_test_count))
+test_count=$(($percentage_success_count))
 percentage_avg=$(($percentage_total / $test_count))
 
 percentage_target=$2

@@ -61,16 +61,16 @@ func Init() (stopFunc func()) {
 
 func (s *Server) Start(router *httprouter.Router) {
 	// GET
-	router.GET("/get-profile/:id", s.middleware.IsAuthorized(s.handler.GetProfileFunc))
-	router.GET("/get-profile-pict/:id", s.middleware.IsAuthorized(s.handler.GetProfilePictFunc))
+	router.GET("/get-profile/:id", s.middleware.IsAuthorized(s.handler.GetProfileFunc()))
+	router.GET("/get-profile-pict/:id", s.middleware.IsAuthorized(s.handler.GetProfilePictFunc()))
 
 	//POST
-	router.POST("/register", s.handler.RegisterUserFunc)
-	router.POST("/login", s.handler.LoginFunc)
-	router.POST("/uploadprofilepict", s.middleware.IsAuthorized(s.handler.UploadProfilePictFunc))
+	router.POST("/register", s.handler.RegisterUserFunc())
+	router.POST("/login", s.handler.LoginFunc())
+	router.POST("/uploadprofilepict", s.middleware.IsAuthorized(s.handler.UploadProfilePictFunc()))
 
 	//PUT
-	router.PUT("/change-nickname", s.middleware.IsAuthorized(s.handler.EditUserFunc))
+	router.PUT("/change-nickname", s.middleware.IsAuthorized(s.handler.EditUserFunc()))
 }
 
 func (s *Server) GracefulStop() (err error) {

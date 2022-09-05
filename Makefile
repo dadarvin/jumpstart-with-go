@@ -10,4 +10,5 @@ dev:
 
 test:
 	@echo "{NOW} == Testing Projects"
-	@go test -cover -race -short | tee test.out
+	@go test ./... -cover -race -short | tee test.out
+	@.dev/test.sh test.out 15

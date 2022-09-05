@@ -3,54 +3,16 @@ package image
 import (
 	"bufio"
 	"encoding/base64"
-	"fmt"
-	"image"
 	_ "image/jpeg"
-	"image/png"
-	"log"
 	"os"
-	"strings"
+	"path/filepath"
 )
-
-// Base64toPng convert base 64 to png format
-func Base64toPng(fIdUser string, fPicture string) error {
-
-	//fPicture adalah base64cie yg dikirim dari clien utk diubah jadi png
-	reader := base64.NewDecoder(base64.StdEncoding, strings.NewReader(fPicture))
-
-	m, formatString, err := image.Decode(reader)
-	if err != nil {
-		log.Fatal(err)
-		return err
-	}
-	bounds := m.Bounds()
-	fmt.Println(bounds, formatString)
-
-	//Encode from image format to writer
-	//fUser=nama user yg dijadinakan file name (nama user unique)
-	pngFilename := "assets/Pict_" + fIdUser + ".png"
-
-	f, err := os.OpenFile(pngFilename, os.O_WRONLY|os.O_CREATE, 0777)
-	if err != nil {
-		log.Fatal(err)
-		return err
-	}
-
-	err = png.Encode(f, m)
-	if err != nil {
-		log.Fatal(err)
-		return err
-	}
-	fmt.Println("Png file", pngFilename, "created")
-
-	return nil
-}
 
 // fgetbase64 Gets base64 string of an existing JPEG file
 // fungsi utk mengamfile file berdasarkan nama user, utk diconversi kebase64cide dan dikirim ke clien
 func Fgetbase64(fileName string) (string, error) {
 
-	var filename = "assets/Pict_" + fileName + ".png"
+	var filename = filepath.Dir("assets/Pict_" + fileName + ".png")
 	imgFile, err := os.Open(filename)
 
 	if err != nil {

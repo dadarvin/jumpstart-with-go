@@ -1,50 +1,51 @@
 package usecase
 
 import (
-	"entry_task/internal/config"
+	"encoding/base64"
 	"entry_task/internal/model/user"
 	image2 "entry_task/internal/util/image"
+	"entry_task/pkg/client/encrypt"
 	"errors"
 	"fmt"
-	"github.com/golang-jwt/jwt"
-	"golang.org/x/crypto/bcrypt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
+	"log"
 	"strconv"
-	"time"
+	"strings"
 )
 
-func (u *UseCase) hashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
-	return string(bytes), err
-}
+// Base64toPng convert base 64 to png format
+func (u *UseCase) base64toPng(fIdUser string, fPicture string) error {
 
-func (u *UseCase) checkPasswordHash(password, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	return err == nil
-}
+	//fPicture adalah base64cie yg dikirim dari clien utk diubah jadi png
+	reader := base64.NewDecoder(base64.StdEncoding, strings.NewReader(fPicture))
 
-func (u *UseCase) generateJWT(username string) (string, error) {
-	conf := config.Get()
-
-	var mySigningKey = []byte(conf.AuthConfig.JWTSecret)
-	token := jwt.New(jwt.SigningMethodHS256)
-	claims := token.Claims.(jwt.MapClaims)
-	claims["authorized"] = true
-	claims["username"] = username
-	claims["exp"] = time.Now().Add(time.Minute * 3000000).Unix()
-
-	tokenString, err := token.SignedString(mySigningKey)
+	m, formatString, err := image.Decode(reader)
 	if err != nil {
-		fmt.Println("Something went Wrong: %s" + err.Error())
-		return "", err
+		log.Fatal(err)
+		return err
 	}
+	bounds := m.Bounds()
+	fmt.Println(bounds, formatString)
 
-	return tokenString, nil //JWT
+	//Encode from image format to writer
+	//fUser=nama user yg dijadinakan file name (nama user unique)
+	pngFilename := "assets/Pict_" + fIdUser + ".png"
+
+	err = u.ur.UploadUserPic(m, pngFilename)
+	if err != nil {
+		return err
+	}
+	fmt.Println("Png file", pngFilename, "created")
+
+	return nil
 }
 
 func (u *UseCase) RegisterUser(user user.User) error {
 	// hash password with bcrypt
 	var err error
-	user.Password, err = u.hashPassword(user.Password)
+	user.Password, err = encrypt.HashPassword(user.Password)
 	if err != nil {
 		return err
 	}
@@ -79,12 +80,12 @@ func (u *UseCase) AuthenticateUser(username string, password string) (interface{
 		return nil, errors.New("username not found")
 	}
 
-	match := u.checkPasswordHash(password, user.Password)
+	match := encrypt.CheckPasswordHash(password, user.Password)
 	if !match {
 		return nil, errors.New("password incorrect")
 	}
 
-	validToken, err := u.generateJWT(user.UserName) //JWT , send UserName utk dimasukkan ke claim
+	validToken, err := u.ur.GetJWT(user.UserName) //JWT , send UserName utk dimasukkan ke claim
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +131,7 @@ func (u *UseCase) GetUserByID(userID int) (user.User, error) {
 
 func (u *UseCase) UploadUserPic(id int, username string, picData string) error {
 	idString := strconv.Itoa(id)
-	err := image2.Base64toPng(idString, picData)
+	err := u.base64toPng(idString, picData)
 	if err != nil {
 		return err
 	}

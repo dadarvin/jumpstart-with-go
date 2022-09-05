@@ -3,7 +3,10 @@ package repo
 import (
 	"database/sql"
 	"entry_task/internal/model/user"
-	"fmt"
+	"entry_task/pkg/client/token"
+	"image"
+	"image/png"
+	"os"
 )
 
 func (r *Repo) CreateTx() (*sql.Tx, error) {
@@ -13,6 +16,12 @@ func (r *Repo) CreateTx() (*sql.Tx, error) {
 	}
 
 	return tx, nil
+}
+
+func (r *Repo) GetJWT(username string) (string, error) {
+	validToken, err := token.GenerateJWT(username)
+
+	return validToken, err
 }
 
 // UpsertUser Update or insert user data
@@ -34,7 +43,6 @@ func (r *Repo) UpsertUser(user user.User, tx *sql.Tx) error {
 	}
 
 	if err != nil {
-		fmt.Println("error disini")
 		return err
 	}
 
@@ -89,6 +97,20 @@ func (r *Repo) UpdateUserPic(picName string, userID int, tx *sql.Tx) error {
 		_, err = r.db.Master.Exec("UPDATE user SET profile_picture = ? WHERE id = ?", picName, userID)
 	}
 
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *Repo) UploadUserPic(image image.Image, fileName string) error {
+	f, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE, 0777)
+	if err != nil {
+		return err
+	}
+
+	err = png.Encode(f, image)
 	if err != nil {
 		return err
 	}

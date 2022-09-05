@@ -7,6 +7,7 @@ package usecase
 import (
 	sql "database/sql"
 	user "entry_task/internal/model/user"
+	image "image"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -48,6 +49,21 @@ func (m *MockuserRepo) CreateTx() (*sql.Tx, error) {
 func (mr *MockuserRepoMockRecorder) CreateTx() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTx", reflect.TypeOf((*MockuserRepo)(nil).CreateTx))
+}
+
+// GetJWT mocks base method.
+func (m *MockuserRepo) GetJWT(username string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetJWT", username)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetJWT indicates an expected call of GetJWT.
+func (mr *MockuserRepoMockRecorder) GetJWT(username interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetJWT", reflect.TypeOf((*MockuserRepo)(nil).GetJWT), username)
 }
 
 // GetUserByID mocks base method.
@@ -92,6 +108,20 @@ func (m *MockuserRepo) UpdateUserPic(picName string, userID int, tx *sql.Tx) err
 func (mr *MockuserRepoMockRecorder) UpdateUserPic(picName, userID, tx interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUserPic", reflect.TypeOf((*MockuserRepo)(nil).UpdateUserPic), picName, userID, tx)
+}
+
+// UploadUserPic mocks base method.
+func (m *MockuserRepo) UploadUserPic(image image.Image, fileName string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UploadUserPic", image, fileName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UploadUserPic indicates an expected call of UploadUserPic.
+func (mr *MockuserRepoMockRecorder) UploadUserPic(image, fileName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UploadUserPic", reflect.TypeOf((*MockuserRepo)(nil).UploadUserPic), image, fileName)
 }
 
 // UpsertUser mocks base method.

@@ -25,13 +25,13 @@ func (m *Middleware) IsAuthorized(handler httprouter.Handle) httprouter.Handle {
 			return mySigningKey, nil
 		})
 		if err != nil {
+			fmt.Print("this2")
 			httputil.ErrorResponse(w, http.StatusUnauthorized, err.Error())
 			return
 		}
 
-		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-			value := fmt.Sprint(claims["username"])
-			fmt.Print(value)
+		if _, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+			//value := fmt.Sprint(claims["username"])
 			handler(w, r, param)
 			return
 		}

@@ -1,0 +1,25 @@
+?   	entry_task	[no test files]
+?   	entry_task/cmd	[no test files]
+?   	entry_task/cmd/webservice	[no test files]
+ok  	entry_task/cmd/webservice/handler	0.915s	coverage: 65.3% of statements
+ok  	entry_task/cmd/webservice/middleware	0.609s	coverage: 44.4% of statements
+?   	entry_task/internal/component	[no test files]
+?   	entry_task/internal/config	[no test files]
+?   	entry_task/internal/model/user	[no test files]
+ok  	entry_task/internal/repo	0.622s	coverage: 71.2% of statements
+--- FAIL: TestUseCase_GetUserPicByID (0.00s)
+    --- FAIL: TestUseCase_GetUserPicByID/Success (0.00s)
+        user_test.go:155: GetUserPicByID() error = open assets: no such file or directory, wantErr false
+(0,0)-(150,103) jpeg
+Png file assets/Pict_1.png created
+FAIL
+coverage: 75.0% of statements
+FAIL	entry_task/internal/usecase	22.799s
+?   	entry_task/internal/util/httputil	[no test files]
+?   	entry_task/internal/util/image	[no test files]
+?   	entry_task/internal/util/testutil	[no test files]
+?   	entry_task/pkg/client/encrypt	[no test files]
+?   	entry_task/pkg/client/token	[no test files]
+?   	entry_task/pkg/dto/base	[no test files]
+?   	entry_task/pkg/errors	[no test files]
+FAIL

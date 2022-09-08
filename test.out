@@ -1,13 +1,13 @@
 ?   	entry_task	[no test files]
 ?   	entry_task/cmd	[no test files]
 ?   	entry_task/cmd/webservice	[no test files]
-ok  	entry_task/cmd/webservice/handler	1.127s	coverage: 81.5% of statements
+ok  	entry_task/cmd/webservice/handler	(cached)	coverage: 81.5% of statements
 ok  	entry_task/cmd/webservice/middleware	(cached)	coverage: 44.4% of statements
 ?   	entry_task/internal/component	[no test files]
 ?   	entry_task/internal/config	[no test files]
 ?   	entry_task/internal/model/user	[no test files]
 ok  	entry_task/internal/repo	(cached)	coverage: 71.2% of statements
-ok  	entry_task/internal/usecase	54.501s	coverage: 84.2% of statements
+ok  	entry_task/internal/usecase	(cached)	coverage: 84.2% of statements
 ?   	entry_task/internal/util/httputil	[no test files]
 ?   	entry_task/internal/util/image	[no test files]
 ?   	entry_task/internal/util/testutil	[no test files]

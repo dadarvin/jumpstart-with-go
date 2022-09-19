@@ -18,6 +18,7 @@ type Config struct {
 	AuthConfig *AuthConfig
 	DBMaster   *sqlDB
 	DBSlave    *sqlDB
+	Redis      *RedisConfig
 }
 
 // Config config struct for .ini mapping
@@ -41,6 +42,15 @@ type configIni struct {
 	DBSlaveHost  string `ini:"dbslave_host"`
 	DBSlavePort  string `ini:"dbslave_port"`
 	DBSlaveName  string `ini:"d	bslave_name"`
+
+	// Redis config
+	RedisAddr            string `ini:"redismaster_addr"`
+	RedisPass            string `ini:"redusmaster_pass"`
+	RedisMaxIdle         int    `ini:"redis_maxidle"`
+	RedisMaxActive       int    `ini:"redis_maxactive"`
+	RedisIdleTimeout     int64  `ini:"redis_idletimeoutsec"`
+	RedisMaxConnLifetime int64  `ini:"redis_maxconnlifetimesec"`
+	RedisWait            bool   `ini:"redis_wait"`
 }
 
 // Init init the config mapping
@@ -61,6 +71,7 @@ func Init() {
 	appConfig.initCommonConfig(c)
 	appConfig.initAuthConfig(c)
 	appConfig.initSqlDBConfig(c)
+	appConfig.initRedisConfig(c)
 }
 
 // Get getting config data

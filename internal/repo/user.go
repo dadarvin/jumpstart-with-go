@@ -1,12 +1,17 @@
 package repo
 
 import (
+	"context"
 	"database/sql"
+	"encoding/json"
 	"entry_task/internal/model/user"
 	"entry_task/pkg/client/token"
+	"fmt"
+	"github.com/go-redis/redis/v8"
 	"image"
 	"image/png"
 	"os"
+	"time"
 )
 
 func (r *Repo) CreateTx() (*sql.Tx, error) {
@@ -70,18 +75,40 @@ func (r *Repo) GetUserByID(userID int) (user.User, error) {
 
 // GetUserByName Get user data by nickname
 func (r *Repo) GetUserByName(username string) (user.User, error) {
-	var err error
+	var (
+		err  error
+		each user.User
+	)
+
+	// Get Data from Redis if exist on cache
+	cacheData, err := r.cache.Redis.Get(context.Background(), "userData_"+username).Result()
+	if err != redis.Nil || err == nil {
+		err = json.Unmarshal([]byte(cacheData), &each)
+		if err != nil {
+			return user.User{}, err
+		}
+
+		return each, nil
+	}
+
+	// If data is not exist in cache, get from database and set cache
 	rows, err := r.db.Master.Query("SELECT id, username, nickname, password FROM user WHERE username=? LIMIT 1", username)
 	if err != nil {
 		return user.User{}, err
 	}
 
-	var each user.User
 	for rows.Next() {
 		var err = rows.Scan(&each.Id, &each.UserName, &each.NickName, &each.Password)
 		if err != nil {
 			return user.User{}, err
 		}
+	}
+
+	json, _ := json.Marshal(each)
+	ttl := time.Duration(7) * time.Second
+	setStatus := r.cache.Redis.Set(context.Background(), "userData_"+username, string(json), ttl)
+	if setStatus.Err() != nil {
+		fmt.Errorf("errRedis %+v", err)
 	}
 
 	return each, nil

@@ -5,7 +5,7 @@ import (
 	"entry_task/internal/model/user"
 	"entry_task/internal/util/httputil"
 	"github.com/julienschmidt/httprouter"
-	"io"
+	"io/ioutil"
 	"net/http"
 	"strconv"
 )
@@ -24,7 +24,7 @@ func (h *Handler) RegisterUserFunc() httprouter.Handle {
 			return
 		}
 
-		bodyVal, err := io.ReadAll(r.Body)
+		bodyVal, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			httputil.ErrorResponse(w, http.StatusBadRequest, err.Error())
 			return
@@ -60,7 +60,7 @@ func (h *Handler) LoginFunc() httprouter.Handle {
 			return
 		}
 
-		bodyVal, err := io.ReadAll(r.Body)
+		bodyVal, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			httputil.ErrorResponse(w, http.StatusBadRequest, err.Error())
 			return
@@ -87,7 +87,7 @@ func (h *Handler) EditUserFunc() httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		var user user.User
 
-		bodyVal, err := io.ReadAll(r.Body)
+		bodyVal, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			httputil.ErrorResponse(w, http.StatusBadRequest, err.Error())
 			return
@@ -158,7 +158,7 @@ func (h *Handler) UploadProfilePictFunc() httprouter.Handle {
 			httputil.ErrorResponse(w, http.StatusUnsupportedMediaType, " Harus menggunakan POST")
 			return
 		}
-		bodyVal, err := io.ReadAll(r.Body)
+		bodyVal, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			httputil.ErrorResponse(w, http.StatusBadRequest, err.Error())
 			return

@@ -82,13 +82,16 @@ func (r *Repo) GetUserByName(username string) (user.User, error) {
 
 	// Get Data from Redis if exist on cache
 	cacheData, err := r.cache.Redis.Get(context.Background(), "userData_"+username).Result()
-	if err != redis.Nil || err == nil {
+	if err == nil {
 		err = json.Unmarshal([]byte(cacheData), &each)
 		if err != nil {
 			return user.User{}, err
 		}
 
 		return each, nil
+	} else if err != redis.Nil {
+		// Return error when Redis operation fails for reasons other than missing key
+		return user.User{}, err
 	}
 
 	// If data is not exist in cache, get from database and set cache
